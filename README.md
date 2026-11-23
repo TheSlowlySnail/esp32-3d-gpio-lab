@@ -58,7 +58,7 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ## Lokales Setup
 
-Voraussetzung: **Node.js ≥ 20** (empfohlen: **Node.js 24 LTS**) und **npm**.
+Voraussetzung: **Node.js ≥ 20** (empfohlen: **Node.js 26 LTS**) und **npm**.
 
 ```bash
 # Repository klonen

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getCatalogItem } from '../../sandbox/SandboxEngine';
 import type { SandboxPartType } from '../../sandbox/SandboxTypes';
 
 export interface AnimatedSandboxExtra {
@@ -495,13 +496,313 @@ export function createSandboxExtraMesh(
     }
 
     default: {
-      const fallback = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.6, 0.5),
-        new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.4 }),
-      );
-      fallback.position.set(0, 0.65, 0);
-      group.add(fallback);
-      return { group, update: () => {} };
+      const def = getCatalogItem(type);
+      const meta = def.extraMeta;
+      const accent = new THREE.Color(def.accentHex);
+
+      if (!meta) {
+        const fallback = new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 0.6, 0.5),
+          new THREE.MeshStandardMaterial({ color: accent, roughness: 0.4 }),
+        );
+        fallback.position.set(0, 0.65, 0);
+        group.add(fallback);
+        return { group, update: () => {} };
+      }
+
+      const pcbBg =
+        meta.meshStyle === 'actuator-display'
+          ? '#0f172a'
+          : meta.meshStyle === 'actuator-relay'
+            ? '#1e3a8a'
+            : meta.meshStyle === 'actuator-motor'
+              ? '#1e293b'
+              : def.accentHex;
+      const tex = makeLabelTexture(meta.badgeTitle, pcbBg, '#ffffff', meta.badgeSub);
+
+      switch (meta.meshStyle) {
+        case 'sensor-probe': {
+          // Metallische Mess-Sonde / Fühler auf kleinem Breakout-Sockel
+          const base = new THREE.Mesh(
+            new THREE.BoxGeometry(0.82, 0.28, 0.45),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }),
+          );
+          base.position.set(0, 0.44, 0);
+          group.add(base);
+
+          const probe = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.14, 0.14, 1.15, 16),
+            new THREE.MeshStandardMaterial({ color: 0xd4d4d8, metalness: 0.88, roughness: 0.2 }),
+          );
+          probe.position.set(0, 1.12, 0);
+          group.add(probe);
+
+          const tip = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 12), statusLedMat);
+          tip.position.set(0, 1.7, 0);
+          group.add(tip);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              statusLedMat.emissive.copy(accent);
+              statusLedMat.emissiveIntensity = active
+                ? 2.0 + Math.sin(t * 7) * 0.5
+                : powered
+                  ? 0.45
+                  : 0;
+            },
+          };
+        }
+
+        case 'sensor-lens': {
+          // Optik-/Kamera-/IR-/ToF-/Fingerprint-Modul mit dunkler Linse + LED-Ring
+          const body = new THREE.Mesh(
+            new THREE.BoxGeometry(1.12, 0.92, 0.24),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 }),
+          );
+          body.position.set(0, 0.82, 0);
+          body.castShadow = true;
+          group.add(body);
+
+          const lens = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.24, 0.28, 0.22, 20),
+            new THREE.MeshStandardMaterial({ color: 0x090d16, metalness: 0.9, roughness: 0.12 }),
+          );
+          lens.rotation.x = Math.PI / 2;
+          lens.position.set(0, 0.88, 0.16);
+          group.add(lens);
+
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.04, 10, 22), statusLedMat);
+          ring.position.set(0, 0.88, 0.26);
+          group.add(ring);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              statusLedMat.emissive.copy(accent);
+              statusLedMat.emissiveIntensity = active
+                ? 2.6 + Math.sin(t * 9) * 0.6
+                : powered
+                  ? 0.5
+                  : 0;
+            },
+          };
+        }
+
+        case 'sensor-coil': {
+          // Antenne / Stromwandler / Magnetspule (Kupfer/Keramik)
+          const pcb = new THREE.Mesh(
+            new THREE.BoxGeometry(1.1, 0.22, 0.85),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.42 }),
+          );
+          pcb.position.set(0, 0.42, 0);
+          group.add(pcb);
+
+          const coil = new THREE.Mesh(
+            new THREE.TorusGeometry(0.34, 0.1, 12, 24),
+            new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.82, roughness: 0.25 }),
+          );
+          coil.position.set(0, 0.92, 0);
+          group.add(coil);
+
+          const led = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), statusLedMat);
+          led.position.set(0.38, 0.56, 0.26);
+          group.add(led);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              statusLedMat.emissive.copy(accent);
+              statusLedMat.emissiveIntensity = active
+                ? 2.4 + Math.sin(t * 8) * 0.6
+                : powered
+                  ? 0.5
+                  : 0;
+            },
+          };
+        }
+
+        case 'sensor-pad': {
+          // Bedien- & Druck-Element (Joystick / Encoder / Keypad / FSR-Pad)
+          const pad = new THREE.Mesh(
+            new THREE.BoxGeometry(1.05, 0.28, 0.95),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 }),
+          );
+          pad.position.set(0, 0.46, 0);
+          group.add(pad);
+
+          const cap = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.28, 0.34, 0.42, 18),
+            new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35 }),
+          );
+          cap.position.set(0, 0.8, 0);
+          group.add(cap);
+
+          return {
+            group,
+            update: (active, _powered, t) => {
+              cap.rotation.y = active ? t * 2.5 : 0;
+              cap.position.y = active ? 0.76 + Math.sin(t * 10) * 0.04 : 0.8;
+            },
+          };
+        }
+
+        case 'actuator-motor': {
+          // Motor / Pumpe / Schrittmotor / Linearaktor mit drehender Welle!
+          const housing = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.42, 0.42, 0.92, 20),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.72, roughness: 0.3 }),
+          );
+          housing.position.set(0, 0.78, 0);
+          housing.castShadow = true;
+          group.add(housing);
+
+          const labelBand = new THREE.Mesh(
+            new THREE.BoxGeometry(0.92, 0.34, 0.14),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }),
+          );
+          labelBand.position.set(0, 0.78, 0.42);
+          group.add(labelBand);
+
+          const rotor = new THREE.Group();
+          rotor.position.set(0, 1.32, 0);
+          const shaft = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.08, 0.3, 12),
+            new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }),
+          );
+          const arm = new THREE.Mesh(
+            new THREE.BoxGeometry(0.76, 0.08, 0.16),
+            new THREE.MeshStandardMaterial({ color: accent, roughness: 0.3 }),
+          );
+          arm.position.set(0, 0.12, 0);
+          rotor.add(shaft, arm);
+          group.add(rotor);
+
+          return {
+            group,
+            update: (active, _powered, t) => {
+              if (active) rotor.rotation.y = t * 9.5;
+            },
+          };
+        }
+
+        case 'actuator-display': {
+          // Leuchtendes Display / LCD / LED-Matrix / TFT / Nixie / E-Ink!
+          const frame = new THREE.Mesh(
+            new THREE.BoxGeometry(1.55, 1.05, 0.24),
+            new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.35 }),
+          );
+          frame.position.set(0, 0.9, 0);
+          frame.castShadow = true;
+          group.add(frame);
+
+          const screenMat = new THREE.MeshStandardMaterial({
+            map: tex,
+            emissiveMap: tex,
+            emissive: accent,
+            emissiveIntensity: 0,
+            roughness: 0.22,
+          });
+          const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 0.86), screenMat);
+          screen.position.set(0, 0.9, 0.13);
+          group.add(screen);
+
+          const screenLight = new THREE.PointLight(accent, 0, 4.2);
+          screenLight.position.set(0, 0.95, 0.55);
+          group.add(screenLight);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              screenMat.emissiveIntensity = active
+                ? 1.5 + Math.sin(t * 4) * 0.2
+                : powered
+                  ? 0.25
+                  : 0;
+              screenLight.intensity = active ? 1.15 : 0;
+            },
+          };
+        }
+
+        case 'actuator-relay': {
+          // Relais-Bank / SSR / Magnetventil / Schubriegel / Motortreiber
+          const block = new THREE.Mesh(
+            new THREE.BoxGeometry(1.25, 0.78, 0.82),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.38 }),
+          );
+          block.position.set(0, 0.72, 0);
+          block.castShadow = true;
+          group.add(block);
+
+          const statusLed = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), statusLedMat);
+          statusLed.position.set(0.42, 1.14, 0.28);
+          group.add(statusLed);
+
+          return {
+            group,
+            update: (active, powered) => {
+              statusLedMat.emissive.setHex(active ? 0x22c55e : 0xef4444);
+              statusLedMat.emissiveIntensity = active ? 2.6 : powered ? 0.55 : 0;
+            },
+          };
+        }
+
+        case 'actuator-audio': {
+          // Audio / High-Power-Licht / Peltier / Heizfolie / Nebel / Funk
+          const box = new THREE.Mesh(
+            new THREE.BoxGeometry(1.08, 0.78, 0.65),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.36 }),
+          );
+          box.position.set(0, 0.72, 0);
+          box.castShadow = true;
+          group.add(box);
+
+          const emitter = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.14, 20), statusLedMat);
+          emitter.position.set(0, 1.15, 0);
+          group.add(emitter);
+
+          const glowLight = new THREE.PointLight(accent, 0, 4.5);
+          glowLight.position.set(0, 1.4, 0.2);
+          group.add(glowLight);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              const pulse = type === 'strobe-flash' ? (Math.sin(t * 28) > 0.3 ? 3.5 : 0.1) : 1.9 + Math.sin(t * 7) * 0.4;
+              statusLedMat.emissive.copy(accent);
+              statusLedMat.emissiveIntensity = active ? pulse : powered ? 0.25 : 0;
+              glowLight.intensity = active ? (type === 'strobe-flash' ? pulse * 0.6 : 1.3) : 0;
+            },
+          };
+        }
+
+        default: {
+          // sensor-pcb (Kompaktes Breakout-Board mit IC & Status-LED)
+          const pcb = new THREE.Mesh(
+            new THREE.BoxGeometry(1.08, 0.82, 0.18),
+            new THREE.MeshStandardMaterial({ map: tex, roughness: 0.38 }),
+          );
+          pcb.position.set(0, 0.76, 0);
+          pcb.castShadow = true;
+          group.add(pcb);
+
+          const led = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), statusLedMat);
+          led.position.set(0.36, 1.02, 0.12);
+          group.add(led);
+
+          return {
+            group,
+            update: (active, powered, t) => {
+              statusLedMat.emissive.setHex(active ? 0x22d3ee : 0x22c55e);
+              statusLedMat.emissiveIntensity = active
+                ? 2.2 + Math.sin(t * 8) * 0.5
+                : powered
+                  ? 0.55
+                  : 0;
+            },
+          };
+        }
+      }
     }
   }
 }

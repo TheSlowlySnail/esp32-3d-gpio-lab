@@ -1,4 +1,5 @@
 import type { EspBoardId } from '../engine/types';
+import type { FavoriteKind } from '../sandbox/FavoritesStore';
 import { GUIDED_PROJECTS, type GuidedProject } from '../sandbox/GuidedProjects';
 import {
   formatEndpointLabel,
@@ -32,6 +33,7 @@ export interface SandboxPanelCallbacks {
   onAutoApplyGuidedStep: () => void;
   onRestartGuidedProject: () => void;
   onSwitchToFreeSandbox: () => void;
+  onToggleFavorite: (kind: FavoriteKind, id: string) => void;
 }
 
 export interface SandboxPanelViewState {
@@ -45,13 +47,15 @@ export interface SandboxPanelViewState {
   state: SandboxState;
   summary: SandboxSimSummary;
   guidedProject: GuidedProject;
+  favoritePartIds: string[];
+  isGuidedFavorite: boolean;
 }
 
 export class SandboxPanel {
   private readonly container: HTMLElement;
   private readonly callbacks: SandboxPanelCallbacks;
   private lastKey = '';
-  private categoryFilter: 'all' | SandboxCategory = 'all';
+  private categoryFilter: 'all' | 'favorites' | SandboxCategory = 'all';
   private searchQuery = '';
 
   constructor(container: HTMLElement, callbacks: SandboxPanelCallbacks) {
@@ -84,6 +88,8 @@ export class SandboxPanel {
       view.summary.activePartsCount,
       view.guidedProject.id,
       stepCompletionKey,
+      view.favoritePartIds.join(','),
+      view.isGuidedFavorite ? '1' : '0',
       this.categoryFilter,
       this.searchQuery,
     ].join('|');
@@ -134,8 +140,10 @@ export class SandboxPanel {
       ? view.state.parts.find((p) => p.id === view.selectedMovePartId) ?? null
       : null;
 
-    const categories: Array<{ id: 'all' | SandboxCategory; label: string }> = [
+    const favSet = new Set(view.favoritePartIds);
+    const categories: Array<{ id: 'all' | 'favorites' | SandboxCategory; label: string }> = [
       { id: 'all', label: `Alle (${SANDBOX_CATALOG.length})` },
+      { id: 'favorites', label: `★ Fav (${favSet.size})` },
       {
         id: 'Sensoren',
         label: `Sensoren (${SANDBOX_CATALOG.filter((i) => i.category === 'Sensoren').length})`,
@@ -156,7 +164,14 @@ export class SandboxPanel {
 
     const q = this.searchQuery.trim().toLowerCase();
     const filteredCatalog = SANDBOX_CATALOG.filter((item) => {
-      if (this.categoryFilter !== 'all' && item.category !== this.categoryFilter) return false;
+      if (this.categoryFilter === 'favorites' && !favSet.has(item.type)) return false;
+      if (
+        this.categoryFilter !== 'all' &&
+        this.categoryFilter !== 'favorites' &&
+        item.category !== this.categoryFilter
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         item.name.toLowerCase().includes(q) ||
@@ -183,19 +198,28 @@ export class SandboxPanel {
               ${items
                 .map((item) => {
                   const active = view.tool === 'place' && view.selectedPartType === item.type;
+                  const isFav = favSet.has(item.type);
                   const cls = active
                     ? 'bg-cyan-500/20 border-cyan-500 eng-text-accent font-semibold'
                     : 'eng-btn-neutral';
                   return `
-                    <button
-                      type="button"
-                      data-sb-part="${item.type}"
-                      title="${item.description}"
-                      class="px-2 py-1.5 rounded-lg border text-left text-[11px] transition cursor-pointer flex items-center gap-1.5 ${cls}"
-                    >
-                      <span class="w-2 h-2 rounded-full shrink-0" style="background:${item.accentHex}"></span>
-                      <span class="truncate">${item.shortName}</span>
-                    </button>
+                    <div class="rounded-lg border flex items-center transition overflow-hidden ${cls}">
+                      <button
+                        type="button"
+                        data-sb-part="${item.type}"
+                        title="${item.description}"
+                        class="flex-1 min-w-0 px-2 py-1.5 text-left text-[11px] cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${item.accentHex}"></span>
+                        <span class="truncate">${item.shortName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        data-sb-fav-part="${item.type}"
+                        title="${isFav ? 'Aus Favoriten entfernen' : 'Als Favorit merken'}"
+                        class="px-1.5 py-1.5 text-[11px] cursor-pointer shrink-0 ${isFav ? 'text-amber-400' : 'opacity-40 hover:opacity-100 hover:text-amber-400'}"
+                      >${isFav ? '★' : '☆'}</button>
+                    </div>
                   `;
                 })
                 .join('')}
@@ -371,7 +395,12 @@ export class SandboxPanel {
           </div>
 
           <div class="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1">
-            ${catalogHtml || `<p class="text-[11px] eng-text-muted italic">Kein Bauteil für „${this.searchQuery}“ gefunden.</p>`}
+            ${
+              catalogHtml ||
+              (this.categoryFilter === 'favorites'
+                ? `<p class="text-[11px] eng-text-muted italic">Noch keine Bauteile als Favorit markiert — klicke auf ☆ neben einem Sensor oder Aktor!</p>`
+                : `<p class="text-[11px] eng-text-muted italic">Kein Bauteil für „${this.searchQuery}“ gefunden.</p>`)
+            }
           </div>
         </div>
 
@@ -472,7 +501,19 @@ export class SandboxPanel {
         <div class="eng-card rounded-xl border p-3 flex flex-col gap-2">
           <div class="flex items-center justify-between gap-2">
             <span class="text-[10px] font-mono uppercase tracking-wider eng-text-muted font-bold">Projekt wählen (${GUIDED_PROJECTS.length})</span>
-            <span class="text-[10px] font-mono eng-text-accent">${project.durationLabel}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-mono eng-text-accent">${project.durationLabel}</span>
+              <button
+                type="button"
+                data-guided-fav="${project.id}"
+                title="${view.isGuidedFavorite ? 'Aus Favoriten entfernen' : 'Projekt als Favorit merken'}"
+                class="px-1.5 py-0.5 rounded border text-[11px] cursor-pointer transition ${
+                  view.isGuidedFavorite
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                    : 'eng-btn-neutral eng-text-muted hover:text-amber-400'
+                }"
+              >${view.isGuidedFavorite ? '★' : '☆'}</button>
+            </div>
           </div>
           <select data-guided-select class="eng-select eng-input w-full px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer focus:outline-none focus:border-cyan-500">
             ${projectOptions}
@@ -590,6 +631,13 @@ export class SandboxPanel {
       });
     });
 
+    this.container.querySelectorAll<HTMLButtonElement>('[data-sb-fav-part]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.callbacks.onToggleFavorite('part', btn.dataset.sbFavPart!);
+      });
+    });
+
     this.container.querySelectorAll<HTMLButtonElement>('[data-sb-color]').forEach((btn) => {
       btn.addEventListener('click', () => {
         this.callbacks.onSelectWireColor(btn.dataset.sbColor!);
@@ -598,7 +646,7 @@ export class SandboxPanel {
 
     this.container.querySelectorAll<HTMLButtonElement>('[data-sb-cat]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        this.categoryFilter = btn.dataset.sbCat as 'all' | SandboxCategory;
+        this.categoryFilter = btn.dataset.sbCat as 'all' | 'favorites' | SandboxCategory;
         this.lastKey = '';
         this.render(view);
       });
@@ -685,6 +733,10 @@ export class SandboxPanel {
     const sel = this.container.querySelector<HTMLSelectElement>('[data-guided-select]');
     sel?.addEventListener('change', () => {
       this.callbacks.onSelectGuidedProject(sel.value);
+    });
+    this.container.querySelector<HTMLButtonElement>('[data-guided-fav]')?.addEventListener('click', (e) => {
+      const id = (e.currentTarget as HTMLButtonElement).dataset.guidedFav!;
+      this.callbacks.onToggleFavorite('guided', id);
     });
     this.container.querySelector('[data-guided-auto]')?.addEventListener('click', () => {
       this.callbacks.onAutoApplyGuidedStep();

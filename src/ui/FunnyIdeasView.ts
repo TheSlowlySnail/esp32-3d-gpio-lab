@@ -3,11 +3,20 @@ import { FUNNY_IDEAS, type FunnyIdea, type FunnyPlatform } from '../sandbox/Funn
 export class FunnyIdeasView {
   private readonly container: HTMLElement;
   private readonly onLoadIdeaInSandbox: (idea: FunnyIdea) => void;
+  private readonly isFavorite: (id: string) => boolean;
+  private readonly onToggleFavorite: (id: string) => void;
   private activeFilter: 'all' | FunnyPlatform = 'all';
 
-  constructor(container: HTMLElement, onLoadIdeaInSandbox: (idea: FunnyIdea) => void) {
+  constructor(
+    container: HTMLElement,
+    onLoadIdeaInSandbox: (idea: FunnyIdea) => void,
+    isFavorite: (id: string) => boolean,
+    onToggleFavorite: (id: string) => void,
+  ) {
     this.container = container;
     this.onLoadIdeaInSandbox = onLoadIdeaInSandbox;
+    this.isFavorite = isFavorite;
+    this.onToggleFavorite = onToggleFavorite;
     this.render();
   }
 
@@ -94,7 +103,19 @@ export class FunnyIdeasView {
                           </div>
                         </div>
                       </div>
-                      <div class="shrink-0">${platBadge}</div>
+                      <div class="flex items-center gap-1.5 shrink-0">
+                        ${platBadge}
+                        <button
+                          type="button"
+                          data-funny-fav="${idea.id}"
+                          title="${this.isFavorite(idea.id) ? 'Aus Favoriten entfernen' : 'Als Favorit merken'}"
+                          class="w-7 h-7 rounded-lg border flex items-center justify-center text-sm transition cursor-pointer ${
+                            this.isFavorite(idea.id)
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-400'
+                              : 'eng-btn-neutral eng-text-muted hover:text-amber-400'
+                          }"
+                        >${this.isFavorite(idea.id) ? '★' : '☆'}</button>
+                      </div>
                     </div>
 
                     <p class="text-xs font-semibold eng-text-accent leading-relaxed">
@@ -146,6 +167,13 @@ export class FunnyIdeasView {
       btn.addEventListener('click', () => {
         const idea = FUNNY_IDEAS.find((i) => i.id === btn.dataset.loadFunny);
         if (idea) this.onLoadIdeaInSandbox(idea);
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('[data-funny-fav]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.onToggleFavorite(btn.dataset.funnyFav!);
+        this.render();
       });
     });
   }

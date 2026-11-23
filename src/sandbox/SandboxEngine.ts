@@ -1,5 +1,6 @@
 import { getEspBoardById } from '../engine/BoardCatalog';
 import type { EspBoardId } from '../engine/types';
+import { EXPANDED_CATALOG_ITEMS } from './ExpandedCatalog';
 import type {
   PartRuntimeState,
   PlacedPart,
@@ -563,6 +564,8 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     description: 'Kompakter Münz-Vibrationsmotor für stilles haptisches Feedback, Stuhl-Wecker & Wearables.',
     accentHex: '#8b5cf6',
   },
+  // + 40 weitere Sensoren & 40 weitere Aktoren/Displays (insgesamt 116 Bauteile!)
+  ...EXPANDED_CATALOG_ITEMS,
 ];
 
 export function getCatalogItem(type: SandboxPartType): SandboxCatalogItem {
@@ -1113,6 +1116,92 @@ export function evaluateSandboxCircuit(
       continue;
     }
 
+    // ---- 12b) All 80 Expanded Sensors & Actuators (extraMeta-driven) ----
+    if (def.extraMeta) {
+      const m = def.extraMeta;
+      let powered = false;
+      let active = false;
+      let statusText = '3V3 & GND noch anschließen';
+
+      if (m.simKind === 'i2c-sensor' || m.simKind === 'i2c-display') {
+        const vccNet = m.simKind === 'i2c-display' ? nets[1] : nets[0];
+        const gndNet = m.simKind === 'i2c-display' ? nets[0] : nets[1];
+        powered =
+          findSeriesResistanceTo(vccNet, ['board:3V3']) !== null &&
+          findSeriesResistanceTo(gndNet, ['board:GND']) !== null;
+        const hasI2c = isDirectToAny(nets[2], ['board:scl']) && isDirectToAny(nets[3], ['board:sda']);
+        active = powered && hasI2c;
+        if (active) primaryVoltage = (elapsedSeconds * 8) % 1 < 0.25 ? 0.1 : 3.3;
+        statusText = active
+          ? state.sensorTriggered || m.simKind === 'i2c-display'
+            ? m.activeText
+            : m.idleText
+          : powered
+            ? 'Strom OK — SCL & SDA noch verbinden'
+            : '3V3 & GND noch anschließen';
+      } else if (m.simKind === 'uart-sensor') {
+        powered =
+          findSeriesResistanceTo(nets[0], ['board:3V3']) !== null &&
+          findSeriesResistanceTo(nets[1], ['board:GND']) !== null;
+        const hasUart =
+          isDirectToAny(nets[2], ['board:uartRx', 'board:inputA', 'board:uartTx']) ||
+          isDirectToAny(nets[3], ['board:uartTx', 'board:outA', 'board:uartRx']);
+        active = powered && (state.sensorTriggered || hasUart);
+        statusText = powered
+          ? state.sensorTriggered
+            ? m.activeText
+            : m.idleText
+          : '3V3, GND & UART (TX/RX) verbinden';
+      } else if (m.simKind === 'digital-sensor' || m.simKind === 'analog-sensor') {
+        powered =
+          findSeriesResistanceTo(nets[0], ['board:3V3']) !== null &&
+          findSeriesResistanceTo(nets[2], ['board:GND']) !== null;
+        const hasSig = isDirectToAny(nets[1], [
+          'board:inputA',
+          'board:adc',
+          'board:outA',
+          'board:outB',
+          'board:outC',
+        ]);
+        active = powered && state.sensorTriggered;
+        if (powered && hasSig) primaryVoltage = active ? 3.3 : 0.25;
+        statusText = powered ? (active ? m.activeText : m.idleText) : '3V3 & GND anschließen';
+      } else if (m.simKind === 'two-pin-actuator') {
+        const rHigh = findSeriesResistanceTo(nets[0], highSources);
+        const rGnd = findSeriesResistanceTo(nets[1], gndSources);
+        powered = rHigh !== null && rGnd !== null;
+        active = powered;
+        statusText = active ? m.activeText : '+V/Signal & GND verbinden';
+      } else if (m.simKind === 'pwm-actuator' || m.simKind === 'relay-actuator') {
+        powered =
+          findSeriesResistanceTo(nets[1], ['board:3V3']) !== null &&
+          findSeriesResistanceTo(nets[2], ['board:GND']) !== null;
+        const hasSig = findSeriesResistanceTo(nets[0], highSources) !== null;
+        active = powered && hasSig;
+        statusText = active
+          ? m.activeText
+          : powered
+            ? 'Versorgt — Signal-Pin (IN/PWM) an GPIO anschließen'
+            : 'Signal, +V & GND anschließen';
+      }
+
+      if (active || (powered && (m.simKind === 'digital-sensor' || m.simKind === 'analog-sensor' || m.simKind === 'uart-sensor'))) {
+        totalCurrentMa += active ? m.currentMa : m.currentMa * 0.25;
+        activePartsCount++;
+      }
+
+      partStates.set(part.id, {
+        partId: part.id,
+        powered,
+        active,
+        brightnessPct: active ? 100 : powered ? 35 : 0,
+        overcurrent: false,
+        currentMa: active ? m.currentMa : powered ? m.currentMa * 0.25 : 0,
+        statusText,
+      });
+      continue;
+    }
+
     // ---- 13) Passive Parts (Resistors, Poti, Button, Switch, Cap, Diode, LDR, MOSFET) ----
     const isMosfetOn =
       part.type === 'mosfet-irlz44n' && highSources.some((s) => uf.connected(nets[0], s));
@@ -1151,7 +1240,7 @@ export function evaluateSandboxCircuit(
   let statusTone: SandboxSimSummary['statusTone'] = 'info';
   let whatHappens =
     state.parts.length === 0
-      ? 'Das Steckbrett ist noch leer — wähle rechts aus 36 Bauteilen & Sensoren aus und klicke auf ein Steckbrett-Loch!'
+      ? `Das Steckbrett ist noch leer — wähle rechts aus ${SANDBOX_CATALOG.length} Bauteilen, Sensoren & Aktoren aus und klicke auf ein Steckbrett-Loch!`
       : `${state.parts.length} Bauteil(e) und ${state.wires.length} Jumperkabel platziert (${activePartsCount} aktiv).`;
   let whyItHappens =
     'Jede 5er-Spalte auf dem Steckbrett (a–e bzw. f–j) ist intern leitend verbunden. Du kannst Teile jederzeit mit ✋ Verschieben umstecken oder mit 🗑 Löschen entfernen!';

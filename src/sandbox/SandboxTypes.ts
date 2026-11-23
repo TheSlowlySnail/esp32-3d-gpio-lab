@@ -1,54 +1,45 @@
-export type AppMode = 'lessons' | 'sandbox' | 'guided' | 'funny';
+export type AppMode = 'lessons' | 'sandbox' | 'guided' | 'funny' | 'favorites';
 
 export type SandboxToolId = 'place' | 'move' | 'wire' | 'delete';
-
-export type SandboxPartType =
-  // LEDs & Ausgabe (7)
-  | 'led-red'
-  | 'led-green'
-  | 'led-blue'
-  | 'led-yellow'
-  | 'led-rgb'
-  | 'neopixel-ring'
-  | 'laser-diode'
-  // Passiv, Schalter & Leistung (8)
-  | 'resistor-220'
-  | 'resistor-10k'
-  | 'potentiometer'
-  | 'button'
-  | 'slide-switch'
-  | 'capacitor'
-  | 'diode-1n4007'
-  | 'mosfet-irlz44n'
-  // Sensoren (14)
-  | 'ldr'
-  | 'bme280'
-  | 'dht22'
-  | 'hcsr04'
-  | 'ld2490'
-  | 'pir-hc501'
-  | 'mq2-gas'
-  | 'soil-moisture'
-  | 'mpu6050'
-  | 'rfid-rc522'
-  | 'touch-ttp223'
-  | 'sound-mic'
-  | 'hall-sensor'
-  | 'rain-sensor'
-  // Aktoren & Displays (7)
-  | 'oled'
-  | 'seven-seg'
-  | 'servo'
-  | 'buzzer'
-  | 'relay-module'
-  | 'cooling-fan'
-  | 'vib-motor';
 
 export type SandboxCategory =
   | 'LEDs & Ausgabe'
   | 'Passiv & Schalter'
   | 'Sensoren'
   | 'Aktoren & Displays';
+
+export type ExtraMeshStyle =
+  | 'sensor-pcb'
+  | 'sensor-probe'
+  | 'sensor-lens'
+  | 'sensor-coil'
+  | 'sensor-pad'
+  | 'actuator-motor'
+  | 'actuator-display'
+  | 'actuator-relay'
+  | 'actuator-audio';
+
+export type ExtraSimKind =
+  | 'i2c-sensor'
+  | 'digital-sensor'
+  | 'analog-sensor'
+  | 'uart-sensor'
+  | 'two-pin-actuator'
+  | 'pwm-actuator'
+  | 'i2c-display'
+  | 'relay-actuator';
+
+export interface ExtraPartMeta {
+  simKind: ExtraSimKind;
+  meshStyle: ExtraMeshStyle;
+  badgeTitle: string;
+  badgeSub: string;
+  currentMa: number;
+  activeText: string;
+  idleText: string;
+}
+
+export type SandboxPartType = string;
 
 export interface SandboxCatalogItem {
   type: SandboxPartType;
@@ -60,6 +51,8 @@ export interface SandboxCatalogItem {
   pinOffsets: Array<{ dCol: number; row: string; pinLabel: string }>;
   description: string;
   accentHex: string;
+  /** Optionales Profil für die 80 erweiterten Sensoren & Aktoren */
+  extraMeta?: ExtraPartMeta;
 }
 
 export interface WireEndpoint {
@@ -94,7 +87,7 @@ export interface SandboxState {
   lightPercent: number;
   servoAngleDeg: number;
   radarPresent: boolean;
-  sensorTriggered: boolean; // Globaler Test-Auslöser für PIR, Gas, Feuchte, Touch, Sound, Hall, Regen, RFID
+  sensorTriggered: boolean; // Globaler Test-Auslöser für Sensoren
   switchClosed: boolean; // Schiebeschalter EIN/AUS
 }
 

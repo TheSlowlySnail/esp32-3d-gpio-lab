@@ -19,6 +19,7 @@ import {
   getGuidedProjectById,
   GUIDED_PROJECTS,
 } from './sandbox/GuidedProjects';
+import { FavoritesStore, type FavoriteKind } from './sandbox/FavoritesStore';
 import { FUNNY_IDEAS, type FunnyIdea } from './sandbox/FunnyIdeas';
 import {
   createStarterSandboxState,
@@ -40,6 +41,7 @@ import type {
 import { SceneManager } from './scene/SceneManager';
 import { CodeGeneratorPanel } from './ui/CodeGenerator';
 import { ControlsPanel } from './ui/ControlsPanel';
+import { FavoritesView } from './ui/FavoritesView';
 import { FritzingSchematicPanel } from './ui/FritzingSchematic';
 import { FunnyIdeasView } from './ui/FunnyIdeasView';
 import { Oscilloscope } from './ui/Oscilloscope';
@@ -141,8 +143,9 @@ class LearnEsp32App {
   private theme: ThemeMode = 'dark';
   private roomDimmed = false;
 
-  // App-Modus: Lektionen | Freie Werkbank | Geführter Bau-Assistent | Funny Ideen
+  // App-Modus: Lektionen | Freie Werkbank | Geführter Bau-Assistent | Funny Ideen | Favoriten
   private appMode: AppMode = 'lessons';
+  private readonly favorites = new FavoritesStore();
   private sandboxState: SandboxState = createStarterSandboxState();
   private sandboxTool: SandboxToolId = 'place';
   private selectedPartType: SandboxPartType = 'resistor-220';
@@ -158,16 +161,20 @@ class LearnEsp32App {
   private controlsPanel!: ControlsPanel;
   private sandboxPanel!: SandboxPanel;
   private funnyView!: FunnyIdeasView;
+  private favoritesView!: FavoritesView;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
   private lessonPickerWrapEl!: HTMLElement;
+  private lessonFavBtnEl!: HTMLButtonElement;
   private boardSelectEl!: HTMLSelectElement;
   private themeBtnEl!: HTMLButtonElement;
   private roomDimBtnEl!: HTMLButtonElement;
   private noBreadboardBtnEl!: HTMLButtonElement;
   private workspaceMainEl!: HTMLElement;
   private funnyMountEl!: HTMLElement;
+  private favoritesMountEl!: HTMLElement;
+  private favCountBadgeEl!: HTMLElement;
   private controlsMountEl!: HTMLElement;
   private sandboxMountEl!: HTMLElement;
   private modeLegendEl!: HTMLElement;
@@ -261,12 +268,13 @@ class LearnEsp32App {
 
         <!-- Center Selectors: Lesson Picker (19) + Board Picker (10) -->
         <div class="flex items-center gap-2 min-w-0 flex-1 justify-center">
-          <div data-wrap="lesson-picker" class="flex items-center gap-1 min-w-0 max-w-[325px] w-full">
+          <div data-wrap="lesson-picker" class="flex items-center gap-1 min-w-0 max-w-[355px] w-full">
             <button type="button" data-action="prev-lesson" title="Vorherige Lektion" class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0">◀</button>
             <select data-select="lesson" aria-label="Lektion auswählen" class="eng-select eng-input flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer focus:outline-none focus:border-cyan-500">
               ${lessonOptionsHtml}
             </select>
             <button type="button" data-action="next-lesson" title="Nächste Lektion" class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0">▶</button>
+            <button type="button" data-action="toggle-lesson-fav" title="Aktuelle Lektion als Favorit merken" class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0">☆</button>
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0">
@@ -354,9 +362,9 @@ class LearnEsp32App {
         </div>
       </header>
 
-      <!-- 4-Sektionen-Navigationsleiste: Lektionen | Freie Werkbank | Bau mit mir! | Funny Ideen -->
+      <!-- 5-Sektionen-Navigationsleiste: Lektionen | Freie Werkbank | Bau mit mir! | Funny Ideen | Favoriten -->
       <nav class="eng-header shrink-0 px-3 sm:px-4 py-1.5 border-b flex items-center justify-between gap-3 z-20">
-        <div class="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Arbeitsbereich wählen">
+        <div class="flex items-center gap-1.5 overflow-x-auto shrink-0" role="tablist" aria-label="Arbeitsbereich wählen">
           <button
             type="button"
             role="tab"
@@ -397,8 +405,18 @@ class LearnEsp32App {
             <span>Funny Ideen</span>
             <span class="text-[10px] font-mono opacity-80">(${FUNNY_IDEAS.length})</span>
           </button>
+          <button
+            type="button"
+            role="tab"
+            data-mode="favorites"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>⭐</span>
+            <span>Favoriten</span>
+            <span data-fav-count class="text-[10px] font-mono opacity-80">(${this.favorites.getTotalCount()})</span>
+          </button>
         </div>
-        <div data-mode-hint class="hidden xl:flex items-center gap-1.5 text-[11px] font-mono eng-text-muted truncate">
+        <div data-mode-hint class="hidden 2xl:flex items-center gap-1.5 text-[11px] font-mono eng-text-muted truncate min-w-0">
           <span>Wähle eine Lektion oder baue in der Werkbank deine eigene Schaltung</span>
         </div>
       </nav>
@@ -454,6 +472,9 @@ class LearnEsp32App {
 
       <!-- Rubrik: Funny Maker-Ideen für Raspberry Pi & ESP32 -->
       <section data-mount="funny" class="hidden flex-1 overflow-y-auto"></section>
+
+      <!-- Rubrik: Favoriten (Gespeicherte Bauteile, Lektionen, Bauprojekte & Funny Ideen) -->
+      <section data-mount="favorites" class="hidden flex-1 overflow-y-auto"></section>
 
       <!-- Component Registry Modal -->
       <div data-modal="registry" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm items-center justify-center p-4">
@@ -511,12 +532,15 @@ class LearnEsp32App {
 
     this.lessonSelectEl = this.root.querySelector('[data-select="lesson"]')!;
     this.lessonPickerWrapEl = this.root.querySelector('[data-wrap="lesson-picker"]')!;
+    this.lessonFavBtnEl = this.root.querySelector('[data-action="toggle-lesson-fav"]')!;
     this.boardSelectEl = this.root.querySelector('[data-select="board"]')!;
     this.themeBtnEl = this.root.querySelector('[data-action="toggle-theme"]')!;
     this.roomDimBtnEl = this.root.querySelector('[data-action="toggle-room-dim"]')!;
     this.noBreadboardBtnEl = this.root.querySelector('[data-action="toggle-breadboard"]')!;
     this.workspaceMainEl = this.root.querySelector('[data-wrap="workspace"]')!;
     this.funnyMountEl = this.root.querySelector('[data-mount="funny"]')!;
+    this.favoritesMountEl = this.root.querySelector('[data-mount="favorites"]')!;
+    this.favCountBadgeEl = this.root.querySelector('[data-fav-count]')!;
     this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
     this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
     this.modeLegendEl = this.root.querySelector('[data-legend="mode"]')!;
@@ -557,9 +581,34 @@ class LearnEsp32App {
       onTogglePartRemoved: (partId) => this.togglePartRemoved(partId),
       onRestoreAllParts: () => this.restoreAllParts(),
     });
-    this.funnyView = new FunnyIdeasView(this.funnyMountEl, (idea) =>
-      this.loadFunnyIdeaInSandbox(idea),
+    this.funnyView = new FunnyIdeasView(
+      this.funnyMountEl,
+      (idea) => this.loadFunnyIdeaInSandbox(idea),
+      (id) => this.favorites.has('funny', id),
+      (id) => this.handleToggleFavorite('funny', id),
     );
+    this.favoritesView = new FavoritesView(this.favoritesMountEl, this.favorites, {
+      onOpenPartInSandbox: (type) => {
+        this.selectedPartType = type;
+        this.sandboxTool = 'place';
+        this.setAppMode('sandbox');
+      },
+      onOpenLesson: (id) => {
+        this.setAppMode('lessons');
+        this.selectLesson(id, false);
+      },
+      onOpenGuidedProject: (projectId) => {
+        this.guidedProjectId = projectId;
+        this.sandboxState = createStarterSandboxState();
+        this.setAppMode('guided');
+      },
+      onLoadFunnyIdea: (idea) => this.loadFunnyIdeaInSandbox(idea),
+      onToggleFavorite: (kind, id) => this.handleToggleFavorite(kind, id),
+      onClearAllFavorites: () => {
+        this.favorites.clearAll();
+        this.refreshFavoritesUi();
+      },
+    });
     this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
       onSelectTool: (tool) => {
         this.sandboxTool = tool;
@@ -661,6 +710,7 @@ class LearnEsp32App {
       onSwitchToFreeSandbox: () => {
         this.setAppMode('sandbox');
       },
+      onToggleFavorite: (kind, id) => this.handleToggleFavorite(kind, id),
     });
 
     this.populateRegistryModal();
@@ -942,6 +992,10 @@ class LearnEsp32App {
       this.selectLesson(next.id, false);
     });
 
+    this.lessonFavBtnEl.addEventListener('click', () => {
+      this.handleToggleFavorite('lesson', this.params.topology);
+    });
+
     this.boardSelectEl.addEventListener('change', () => {
       this.selectBoard(this.boardSelectEl.value as EspBoardId);
     });
@@ -1087,6 +1141,34 @@ class LearnEsp32App {
     this.setAppMode('sandbox');
   }
 
+  private handleToggleFavorite(kind: FavoriteKind, id: string): void {
+    this.favorites.toggle(kind, id);
+    this.refreshFavoritesUi();
+  }
+
+  private refreshFavoritesUi(): void {
+    this.favCountBadgeEl.textContent = `(${this.favorites.getTotalCount()})`;
+    this.updateLessonFavButtonUi();
+    if (this.appMode === 'favorites') {
+      this.favoritesView.render();
+    } else if (this.appMode === 'funny') {
+      this.funnyView.render();
+    } else if (this.appMode === 'sandbox' || this.appMode === 'guided') {
+      this.stepSimulation(true);
+    }
+  }
+
+  private updateLessonFavButtonUi(): void {
+    const isFav = this.favorites.has('lesson', this.params.topology);
+    this.lessonFavBtnEl.textContent = isFav ? '★' : '☆';
+    this.lessonFavBtnEl.title = isFav
+      ? 'Lektion aus Favoriten entfernen'
+      : 'Aktuelle Lektion als Favorit merken';
+    this.lessonFavBtnEl.className = isFav
+      ? 'px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0 bg-amber-500/20 border-amber-400 text-amber-400 font-bold'
+      : 'eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0 hover:text-amber-400';
+  }
+
   private setAppMode(mode: AppMode): void {
     if (this.appMode === mode) return;
     const prevMode = this.appMode;
@@ -1105,6 +1187,10 @@ class LearnEsp32App {
       this.funnyView.render();
       return;
     }
+    if (mode === 'favorites') {
+      this.favoritesView.render();
+      return;
+    }
 
     if (mode === 'lessons') {
       const lesson = getLessonById(this.params.topology);
@@ -1120,7 +1206,7 @@ class LearnEsp32App {
 
   private updateModeUi(): void {
     const isLessons = this.appMode === 'lessons';
-    const isFunny = this.appMode === 'funny';
+    const isFullGallery = this.appMode === 'funny' || this.appMode === 'favorites';
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       const m = btn.dataset.mode as AppMode;
@@ -1133,7 +1219,9 @@ class LearnEsp32App {
               ? 'bg-amber-500/20 border-amber-500 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.22)]'
               : m === 'funny'
                 ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.25)]'
-                : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+                : m === 'favorites'
+                  ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
+                  : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
         btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${activeStyle}`;
         btn.setAttribute('aria-selected', 'true');
       } else {
@@ -1143,13 +1231,14 @@ class LearnEsp32App {
       }
     });
 
-    this.workspaceMainEl.classList.toggle('hidden', isFunny);
-    this.funnyMountEl.classList.toggle('hidden', !isFunny);
+    this.workspaceMainEl.classList.toggle('hidden', isFullGallery);
+    this.funnyMountEl.classList.toggle('hidden', this.appMode !== 'funny');
+    this.favoritesMountEl.classList.toggle('hidden', this.appMode !== 'favorites');
 
     this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
     this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
     this.controlsMountEl.classList.toggle('hidden', !isLessons);
-    this.sandboxMountEl.classList.toggle('hidden', isLessons || isFunny);
+    this.sandboxMountEl.classList.toggle('hidden', isLessons || isFullGallery);
 
     if (this.appMode === 'lessons') {
       this.modeSubbarHintEl.textContent =
@@ -1181,9 +1270,12 @@ class LearnEsp32App {
         <span class="opacity-40">•</span>
         <span class="text-emerald-500">🧭 Bau mit mir! (${GUIDED_PROJECTS.length} Projekte)</span>
       `;
-    } else {
+    } else if (this.appMode === 'funny') {
       this.modeSubbarHintEl.textContent =
         `${FUNNY_IDEAS.length} witzige Maker-Ideen für ESP32 & Raspberry Pi — jede mit 1-Klick-3D-Prototyp!`;
+    } else {
+      this.modeSubbarHintEl.textContent =
+        'Deine persönliche Sammlung aus Lieblings-Sensoren, Aktoren, Lektionen, Projekten & Funny-Ideen';
     }
   }
 
@@ -1357,6 +1449,7 @@ class LearnEsp32App {
     };
 
     this.lessonSelectEl.value = id;
+    this.updateLessonFavButtonUi();
     this.hoverTooltipEl.classList.add('hidden');
 
     const hintEl = this.root.querySelector('[data-hint="interactive"]');
@@ -1518,7 +1611,7 @@ class LearnEsp32App {
   }
 
   private stepSimulation(forceHudUpdate: boolean): void {
-    if (this.appMode === 'funny') return;
+    if (this.appMode === 'funny' || this.appMode === 'favorites') return;
 
     const nowMs = performance.now();
     const elapsedSeconds = (nowMs - this.startTimeMs) / 1000;
@@ -1587,6 +1680,8 @@ class LearnEsp32App {
         state: this.sandboxState,
         summary,
         guidedProject,
+        favoritePartIds: this.favorites.getAll().parts,
+        isGuidedFavorite: this.favorites.has('guided', guidedProject.id),
       });
     }
   }

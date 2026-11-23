@@ -2,6 +2,8 @@
 
 Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlagen, Sensoren, Aktoren und WLED-LED-Streifen rund um die ESP32-Mikrocontroller-Familie — gebaut mit **Vite, TypeScript, Tailwind CSS und Three.js** (ohne Framework-Overhead).
 
+**Live-Demo:** https://theslowlysnail.github.io/esp32-3d-gpio-lab/
+
 ---
 
 ## Highlights & Features
@@ -56,11 +58,11 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ## Lokales Setup
 
-Voraussetzung: **Node.js ≥ 20** und **npm**.
+Voraussetzung: **Node.js ≥ 20** (empfohlen: **Node.js 24 LTS**) und **npm**.
 
 ```bash
 # Repository klonen
-git clone https://github.com/<DEIN-USER>/esp32-3d-gpio-lab.git
+git clone https://github.com/TheSlowlySnail/esp32-3d-gpio-lab.git
 cd esp32-3d-gpio-lab
 
 # Abhängigkeiten installieren

@@ -19,10 +19,12 @@ import {
   getGuidedProjectById,
   GUIDED_PROJECTS,
 } from './sandbox/GuidedProjects';
+import { FUNNY_IDEAS, type FunnyIdea } from './sandbox/FunnyIdeas';
 import {
   createStarterSandboxState,
   evaluateSandboxCircuit,
   getCatalogItem,
+  SANDBOX_CATALOG,
 } from './sandbox/SandboxEngine';
 import type {
   AppMode,
@@ -39,6 +41,7 @@ import { SceneManager } from './scene/SceneManager';
 import { CodeGeneratorPanel } from './ui/CodeGenerator';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { FritzingSchematicPanel } from './ui/FritzingSchematic';
+import { FunnyIdeasView } from './ui/FunnyIdeasView';
 import { Oscilloscope } from './ui/Oscilloscope';
 import { SandboxPanel } from './ui/SandboxPanel';
 import { TelemetryHud } from './ui/TelemetryHud';
@@ -126,6 +129,8 @@ function createDemoSandboxState(): SandboxState {
     lightPercent: 60,
     servoAngleDeg: 90,
     radarPresent: true,
+    sensorTriggered: true,
+    switchClosed: true,
   };
 }
 
@@ -136,11 +141,12 @@ class LearnEsp32App {
   private theme: ThemeMode = 'dark';
   private roomDimmed = false;
 
-  // App-Modus: Lektionen | Freie Werkbank | Geführter Bau-Assistent
+  // App-Modus: Lektionen | Freie Werkbank | Geführter Bau-Assistent | Funny Ideen
   private appMode: AppMode = 'lessons';
   private sandboxState: SandboxState = createStarterSandboxState();
   private sandboxTool: SandboxToolId = 'place';
   private selectedPartType: SandboxPartType = 'resistor-220';
+  private selectedMovePartId: string | null = null;
   private wireColorHex = '#38bdf8';
   private wireStart: WireEndpoint | null = null;
   private guidedProjectId: string = GUIDED_PROJECTS[0].id;
@@ -151,6 +157,7 @@ class LearnEsp32App {
   private codeGenerator!: CodeGeneratorPanel;
   private controlsPanel!: ControlsPanel;
   private sandboxPanel!: SandboxPanel;
+  private funnyView!: FunnyIdeasView;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
@@ -159,6 +166,8 @@ class LearnEsp32App {
   private themeBtnEl!: HTMLButtonElement;
   private roomDimBtnEl!: HTMLButtonElement;
   private noBreadboardBtnEl!: HTMLButtonElement;
+  private workspaceMainEl!: HTMLElement;
+  private funnyMountEl!: HTMLElement;
   private controlsMountEl!: HTMLElement;
   private sandboxMountEl!: HTMLElement;
   private modeLegendEl!: HTMLElement;
@@ -345,7 +354,7 @@ class LearnEsp32App {
         </div>
       </header>
 
-      <!-- 3-Sektionen-Navigationsleiste: Lektionen | Freie Werkbank | Bau mit mir! -->
+      <!-- 4-Sektionen-Navigationsleiste: Lektionen | Freie Werkbank | Bau mit mir! | Funny Ideen -->
       <nav class="eng-header shrink-0 px-3 sm:px-4 py-1.5 border-b flex items-center justify-between gap-3 z-20">
         <div class="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Arbeitsbereich wählen">
           <button
@@ -356,7 +365,7 @@ class LearnEsp32App {
           >
             <span>📚</span>
             <span>Lektionen</span>
-            <span class="text-[10px] font-mono opacity-80">(19)</span>
+            <span class="text-[10px] font-mono opacity-80">(${LESSONS.length})</span>
           </button>
           <button
             type="button"
@@ -366,7 +375,7 @@ class LearnEsp32App {
           >
             <span>🔧</span>
             <span>Freie Werkbank</span>
-            <span class="text-[10px] font-mono opacity-80">(14 Teile &amp; Kabel)</span>
+            <span class="text-[10px] font-mono opacity-80">(${SANDBOX_CATALOG.length} Teile)</span>
           </button>
           <button
             type="button"
@@ -376,16 +385,26 @@ class LearnEsp32App {
           >
             <span>🧭</span>
             <span>Bau mit mir!</span>
-            <span class="text-[10px] font-mono opacity-80">(3 Projekte)</span>
+            <span class="text-[10px] font-mono opacity-80">(${GUIDED_PROJECTS.length} Projekte)</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-mode="funny"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>😂</span>
+            <span>Funny Ideen</span>
+            <span class="text-[10px] font-mono opacity-80">(${FUNNY_IDEAS.length})</span>
           </button>
         </div>
-        <div data-mode-hint class="hidden lg:flex items-center gap-1.5 text-[11px] font-mono eng-text-muted truncate">
+        <div data-mode-hint class="hidden xl:flex items-center gap-1.5 text-[11px] font-mono eng-text-muted truncate">
           <span>Wähle eine Lektion oder baue in der Werkbank deine eigene Schaltung</span>
         </div>
       </nav>
 
-      <!-- Main Engineering Workspace -->
-      <main class="flex-1 flex min-h-0 overflow-hidden">
+      <!-- Main Engineering Workspace (3D + Dock + Sidebar) -->
+      <main data-wrap="workspace" class="flex-1 flex min-h-0 overflow-hidden">
         <!-- Left & Center Column: 3D Stage + Bottom Instruments Dock -->
         <div class="flex-1 flex flex-col min-w-0 min-h-0">
           <!-- 3D Viewport -->
@@ -432,6 +451,9 @@ class LearnEsp32App {
           <div data-mount="sandbox" class="hidden"></div>
         </aside>
       </main>
+
+      <!-- Rubrik: Funny Maker-Ideen für Raspberry Pi & ESP32 -->
+      <section data-mount="funny" class="hidden flex-1 overflow-y-auto"></section>
 
       <!-- Component Registry Modal -->
       <div data-modal="registry" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm items-center justify-center p-4">
@@ -493,6 +515,8 @@ class LearnEsp32App {
     this.themeBtnEl = this.root.querySelector('[data-action="toggle-theme"]')!;
     this.roomDimBtnEl = this.root.querySelector('[data-action="toggle-room-dim"]')!;
     this.noBreadboardBtnEl = this.root.querySelector('[data-action="toggle-breadboard"]')!;
+    this.workspaceMainEl = this.root.querySelector('[data-wrap="workspace"]')!;
+    this.funnyMountEl = this.root.querySelector('[data-mount="funny"]')!;
     this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
     this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
     this.modeLegendEl = this.root.querySelector('[data-legend="mode"]')!;
@@ -515,6 +539,10 @@ class LearnEsp32App {
       onTogglePartRemoved: (partId) => this.togglePartRemoved(partId),
       onSandboxEndpointClick: (endpoint) => this.handleSandboxEndpointClick(endpoint),
       onSandboxDeleteItem: (kind, id) => this.handleSandboxDeleteItem(kind, id),
+      onSandboxPickPart: (partId) => {
+        this.selectedMovePartId = partId;
+        this.stepSimulation(true);
+      },
     });
 
     this.telemetryHud = new TelemetryHud(hudMount);
@@ -529,10 +557,14 @@ class LearnEsp32App {
       onTogglePartRemoved: (partId) => this.togglePartRemoved(partId),
       onRestoreAllParts: () => this.restoreAllParts(),
     });
+    this.funnyView = new FunnyIdeasView(this.funnyMountEl, (idea) =>
+      this.loadFunnyIdeaInSandbox(idea),
+    );
     this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
       onSelectTool: (tool) => {
         this.sandboxTool = tool;
         this.wireStart = null;
+        if (tool !== 'move') this.selectedMovePartId = null;
         this.sceneManager.setSandboxTool(tool);
         this.stepSimulation(true);
       },
@@ -540,12 +572,14 @@ class LearnEsp32App {
         this.selectedPartType = type;
         this.sandboxTool = 'place';
         this.wireStart = null;
+        this.selectedMovePartId = null;
         this.sceneManager.setSandboxTool('place');
         this.stepSimulation(true);
       },
       onSelectWireColor: (hex) => {
         this.wireColorHex = hex;
         this.sandboxTool = 'wire';
+        this.selectedMovePartId = null;
         this.sceneManager.setSandboxTool('wire');
         this.stepSimulation(true);
       },
@@ -553,7 +587,28 @@ class LearnEsp32App {
         this.wireStart = null;
         this.stepSimulation(true);
       },
+      onSelectMovePart: (partId) => {
+        this.selectedMovePartId = partId;
+        if (partId) {
+          this.sandboxTool = 'move';
+          this.sceneManager.setSandboxTool('move');
+        }
+        this.stepSimulation(true);
+      },
+      onNudgePart: (partId, deltaCol) => {
+        this.sandboxState = {
+          ...this.sandboxState,
+          parts: this.sandboxState.parts.map((p) => {
+            if (p.id !== partId) return p;
+            const item = getCatalogItem(p.type);
+            const nextCol = Math.max(1, Math.min(30 - item.colSpan, p.col + deltaCol));
+            return { ...p, col: nextCol };
+          }),
+        };
+        this.stepSimulation(true);
+      },
       onDeletePart: (id) => {
+        if (this.selectedMovePartId === id) this.selectedMovePartId = null;
         this.sandboxState = {
           ...this.sandboxState,
           parts: this.sandboxState.parts.filter((p) => p.id !== id),
@@ -570,11 +625,13 @@ class LearnEsp32App {
       onClearBoard: () => {
         this.sandboxState = createStarterSandboxState();
         this.wireStart = null;
+        this.selectedMovePartId = null;
         this.stepSimulation(true);
       },
       onLoadStarterKit: () => {
         this.sandboxState = createDemoSandboxState();
         this.wireStart = null;
+        this.selectedMovePartId = null;
         this.stepSimulation(true);
       },
       onStatePatch: (patch) => {
@@ -585,6 +642,7 @@ class LearnEsp32App {
         this.guidedProjectId = projectId;
         this.sandboxState = createStarterSandboxState();
         this.wireStart = null;
+        this.selectedMovePartId = null;
         this.stepSimulation(true);
       },
       onAutoApplyGuidedStep: () => {
@@ -970,8 +1028,9 @@ class LearnEsp32App {
     });
 
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.wireStart) {
+      if (e.code === 'Escape' && (this.wireStart || this.selectedMovePartId)) {
         this.wireStart = null;
+        this.selectedMovePartId = null;
         this.stepSimulation(true);
         return;
       }
@@ -979,11 +1038,12 @@ class LearnEsp32App {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      if (this.appMode !== 'lessons') {
+      if (this.appMode === 'sandbox' || this.appMode === 'guided') {
         e.preventDefault();
         this.setButtonPressed(true);
         return;
       }
+      if (this.appMode !== 'lessons') return;
 
       if (this.params.topology === 'button-pull') {
         e.preventDefault();
@@ -999,7 +1059,7 @@ class LearnEsp32App {
 
     window.addEventListener('keyup', (e) => {
       if (e.code !== 'Space') return;
-      if (this.appMode !== 'lessons' && this.sandboxState.buttonPressed) {
+      if ((this.appMode === 'sandbox' || this.appMode === 'guided') && this.sandboxState.buttonPressed) {
         e.preventDefault();
         this.setButtonPressed(false);
         return;
@@ -1017,19 +1077,34 @@ class LearnEsp32App {
     });
   }
 
+  private loadFunnyIdeaInSandbox(idea: FunnyIdea): void {
+    this.params = { ...this.params, boardId: idea.recommendedBoardId };
+    this.boardSelectEl.value = idea.recommendedBoardId;
+    this.sandboxState = idea.buildPrototype();
+    this.wireStart = null;
+    this.selectedMovePartId = null;
+    this.sandboxTool = 'move';
+    this.setAppMode('sandbox');
+  }
+
   private setAppMode(mode: AppMode): void {
     if (this.appMode === mode) return;
     const prevMode = this.appMode;
     this.appMode = mode;
     this.wireStart = null;
+    this.selectedMovePartId = null;
     this.hoverTooltipEl.classList.add('hidden');
 
     if (mode === 'guided' && prevMode !== 'guided') {
-      // Beim Start des Geführten Assistenten mit sauberem Steckbrett beginnen, falls noch Demo/alte Teile liegen
       this.sandboxState = createStarterSandboxState();
     }
 
     this.updateModeUi();
+
+    if (mode === 'funny') {
+      this.funnyView.render();
+      return;
+    }
 
     if (mode === 'lessons') {
       const lesson = getLessonById(this.params.topology);
@@ -1045,6 +1120,7 @@ class LearnEsp32App {
 
   private updateModeUi(): void {
     const isLessons = this.appMode === 'lessons';
+    const isFunny = this.appMode === 'funny';
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       const m = btn.dataset.mode as AppMode;
@@ -1055,7 +1131,9 @@ class LearnEsp32App {
             ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.22)]'
             : m === 'sandbox'
               ? 'bg-amber-500/20 border-amber-500 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.22)]'
-              : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+              : m === 'funny'
+                ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.25)]'
+                : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
         btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${activeStyle}`;
         btn.setAttribute('aria-selected', 'true');
       } else {
@@ -1065,10 +1143,13 @@ class LearnEsp32App {
       }
     });
 
+    this.workspaceMainEl.classList.toggle('hidden', isFunny);
+    this.funnyMountEl.classList.toggle('hidden', !isFunny);
+
     this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
     this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
     this.controlsMountEl.classList.toggle('hidden', !isLessons);
-    this.sandboxMountEl.classList.toggle('hidden', isLessons);
+    this.sandboxMountEl.classList.toggle('hidden', isLessons || isFunny);
 
     if (this.appMode === 'lessons') {
       this.modeSubbarHintEl.textContent =
@@ -1082,24 +1163,27 @@ class LearnEsp32App {
       `;
     } else if (this.appMode === 'sandbox') {
       this.modeSubbarHintEl.textContent =
-        'Wähle rechts ein Bauteil oder Jumperkabel und klicke direkt auf Breadboard-Löcher oder leuchtende Board-Pins!';
+        `${SANDBOX_CATALOG.length} Sensoren & Aktoren · Platzieren, ✋ Verschieben, 〰 Verkabeln & 🗑 Löschen direkt in 3D!`;
       this.modeLegendEl.innerHTML = `
-        <span>Bauteil setzen: Klick auf Steckbrett</span>
+        <span>Setzen / ✋ Verschieben: Klick aufs Steckbrett</span>
         <span class="opacity-40">•</span>
-        <span>Jumperkabel: 2 Punkte anklicken (ESC = Abbruch)</span>
+        <span>〰 Kabel: 2 Punkte (ESC = Abbruch)</span>
         <span class="opacity-40">•</span>
-        <span class="eng-text-accent">Freie Werkbank Live</span>
+        <span class="eng-text-accent">Freie Werkbank (${SANDBOX_CATALOG.length} Teile)</span>
       `;
-    } else {
+    } else if (this.appMode === 'guided') {
       this.modeSubbarHintEl.textContent =
-        'Folge den pulsierenden 3D-Markierungen oder klicke rechts auf „Diesen Schritt für mich stecken“!';
+        `${GUIDED_PROJECTS.length} geführte Projekte — folge den pulsierenden 3D-Markierungen oder klicke „Diesen Schritt für mich stecken“!`;
       this.modeLegendEl.innerHTML = `
         <span>Pulsierende Ringe: Hier klicken!</span>
         <span class="opacity-40">•</span>
         <span>Automatische Schritt-Prüfung</span>
         <span class="opacity-40">•</span>
-        <span class="text-emerald-500">🧭 Bau mit mir! Aktiv</span>
+        <span class="text-emerald-500">🧭 Bau mit mir! (${GUIDED_PROJECTS.length} Projekte)</span>
       `;
+    } else {
+      this.modeSubbarHintEl.textContent =
+        `${FUNNY_IDEAS.length} witzige Maker-Ideen für ESP32 & Raspberry Pi — jede mit 1-Klick-3D-Prototyp!`;
     }
   }
 
@@ -1157,7 +1241,27 @@ class LearnEsp32App {
       return;
     }
 
-    // Free Sandbox Mode
+    // Free Sandbox Mode: Move selected part to clicked column
+    if (this.sandboxTool === 'move') {
+      if (!this.selectedMovePartId || endpoint.kind !== 'breadboard' || endpoint.col === undefined) {
+        return;
+      }
+      const moveId = this.selectedMovePartId;
+      this.sandboxState = {
+        ...this.sandboxState,
+        parts: this.sandboxState.parts.map((p) => {
+          if (p.id !== moveId) return p;
+          const item = getCatalogItem(p.type);
+          const col = Math.max(1, Math.min(30 - item.colSpan, endpoint.col!));
+          return { ...p, col };
+        }),
+      };
+      this.selectedMovePartId = null;
+      this.stepSimulation(true);
+      return;
+    }
+
+    // Free Sandbox Mode: Place new part
     if (this.sandboxTool === 'place') {
       if (endpoint.kind !== 'breadboard' || endpoint.col === undefined) return;
       const item = getCatalogItem(this.selectedPartType);
@@ -1204,6 +1308,7 @@ class LearnEsp32App {
 
   private handleSandboxDeleteItem(kind: 'part' | 'wire', id: string): void {
     if (kind === 'part') {
+      if (this.selectedMovePartId === id) this.selectedMovePartId = null;
       this.sandboxState = {
         ...this.sandboxState,
         parts: this.sandboxState.parts.filter((p) => p.id !== id),
@@ -1413,6 +1518,8 @@ class LearnEsp32App {
   }
 
   private stepSimulation(forceHudUpdate: boolean): void {
+    if (this.appMode === 'funny') return;
+
     const nowMs = performance.now();
     const elapsedSeconds = (nowMs - this.startTimeMs) / 1000;
 
@@ -1460,6 +1567,7 @@ class LearnEsp32App {
       highlights,
       this.wireStart,
       elapsedSeconds,
+      this.selectedMovePartId,
     );
 
     const sandboxSimResult = this.buildSandboxSimResult(summary, elapsedSeconds);
@@ -1473,6 +1581,7 @@ class LearnEsp32App {
         boardId: this.params.boardId,
         tool: this.sandboxTool,
         selectedPartType: this.selectedPartType,
+        selectedMovePartId: this.selectedMovePartId,
         wireColorHex: this.wireColorHex,
         wireStart: this.wireStart,
         state: this.sandboxState,

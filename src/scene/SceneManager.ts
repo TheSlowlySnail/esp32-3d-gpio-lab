@@ -39,6 +39,7 @@ import {
 import { LevelShifterMesh, WledStripMesh } from './components/WledStripMesh';
 import { MeanWellPowerMesh, WagoClampMesh } from './components/PowerAndWiringMeshes';
 import { CoolingFanMesh, OledDisplayMesh } from './components/PiPeripheralsMesh';
+import { createSandboxExtraMesh, type AnimatedSandboxExtra } from './components/SandboxExtraMeshes';
 
 export interface SceneCallbacks {
   onButtonPressChange?: (pressed: boolean) => void;
@@ -46,6 +47,7 @@ export interface SceneCallbacks {
   onTogglePartRemoved?: (partId: string) => void;
   onSandboxEndpointClick?: (endpoint: WireEndpoint) => void;
   onSandboxDeleteItem?: (kind: 'part' | 'wire', id: string) => void;
+  onSandboxPickPart?: (partId: string) => void;
 }
 
 function createWorkbenchTexture(theme: ThemeMode): THREE.CanvasTexture {
@@ -179,6 +181,7 @@ export class SceneManager {
   // Sandbox & Guided Builder state
   private sandboxModeActive = false;
   private sandboxTool: SandboxToolId = 'place';
+  private selectedMovePartId: string | null = null;
   private readonly markerGroup = new THREE.Group();
   private readonly boardPinPadsGroup = new THREE.Group();
   private readonly hoverSnapRing: THREE.Mesh;
@@ -187,6 +190,7 @@ export class SceneManager {
     {
       type: string;
       led?: LedMesh;
+      rgbLed?: RgbLedMesh;
       button?: ButtonMesh;
       ldr?: LdrMesh;
       bme280?: Bme280Mesh;
@@ -195,6 +199,9 @@ export class SceneManager {
       oled?: OledDisplayMesh;
       servo?: ServoMesh;
       buzzer?: BuzzerMesh;
+      relay?: RelayModuleMesh;
+      fan?: CoolingFanMesh;
+      extra?: AnimatedSandboxExtra;
     }
   >();
   private lastMarkerKey = '';
@@ -1642,9 +1649,11 @@ export class SceneManager {
     highlights: HighlightMarker[],
     wireStart: WireEndpoint | null,
     elapsedSeconds: number,
+    selectedMovePartId: string | null = null,
   ): void {
     this.sandboxModeActive = true;
     this.lastSandboxElapsed = elapsedSeconds;
+    this.selectedMovePartId = selectedMovePartId;
     this.breadboard.group.visible = true;
     this.boardPinPadsGroup.visible = true;
     this.markerGroup.visible = true;
@@ -1677,7 +1686,13 @@ export class SceneManager {
 
       if (handle.led) {
         const colId =
-          part.type === 'led-green' ? 'green' : part.type === 'led-blue' ? 'blue' : 'red';
+          part.type === 'led-green'
+            ? 'green'
+            : part.type === 'led-blue'
+              ? 'blue'
+              : part.type === 'led-yellow'
+                ? 'yellow'
+                : 'red';
         handle.led.updateVisuals(
           colId,
           runtime.brightnessPct,
@@ -1685,6 +1700,10 @@ export class SceneManager {
           runtime.overcurrent,
           elapsedSeconds,
         );
+      }
+      if (handle.rgbLed) {
+        const col = new THREE.Color().setHSL((elapsedSeconds * 0.25) % 1, 0.95, 0.55);
+        handle.rgbLed.updateRgb(`#${col.getHexString()}`, runtime.active ? 95 : 0);
       }
       if (handle.button) {
         handle.button.setPressed(state.buttonPressed);
@@ -1726,12 +1745,31 @@ export class SceneManager {
       if (handle.buzzer) {
         handle.buzzer.updateSound(runtime.active, 880, elapsedSeconds);
       }
+      if (handle.relay) {
+        handle.relay.updateState(runtime.active, false, true);
+      }
+      if (handle.fan) {
+        handle.fan.setSpeed(runtime.active ? 100 : 0);
+      }
+      if (handle.extra) {
+        handle.extra.update(runtime.active, runtime.powered, elapsedSeconds);
+      }
     }
 
-    // Update pulsing target markers (Guided Builder + active wire start point)
+    // Update pulsing target markers (Guided Builder + active wire start point + selected move part)
     const allMarkers: HighlightMarker[] = [...highlights];
     if (wireStart) {
       allMarkers.push({ endpoint: wireStart, colorHex: '#facc15', label: 'Start' });
+    }
+    if (selectedMovePartId) {
+      const moved = state.parts.find((p) => p.id === selectedMovePartId);
+      if (moved) {
+        allMarkers.push({
+          endpoint: { kind: 'breadboard', col: moved.col, row: moved.row },
+          colorHex: '#f59e0b',
+          label: 'Verschieben',
+        });
+      }
     }
     const markerKey = allMarkers
       .map(
@@ -1792,16 +1830,28 @@ export class SceneManager {
       switch (part.type) {
         case 'led-red':
         case 'led-green':
-        case 'led-blue': {
+        case 'led-blue':
+        case 'led-yellow': {
           const led = new LedMesh(pins[0], pins[1]);
           handle.led = led;
           group = led.group;
+          break;
+        }
+        case 'led-rgb': {
+          const rgb = new RgbLedMesh(pins);
+          handle.rgbLed = rgb;
+          group = rgb.group;
           break;
         }
         case 'resistor-220':
         case 'resistor-10k': {
           const r = new ResistorMesh(pins[0], pins[1], part.type === 'resistor-220' ? 220 : 10000);
           group = r.group;
+          break;
+        }
+        case 'mosfet-irlz44n': {
+          const m = new MosfetMesh(pins);
+          group = m.group;
           break;
         }
         case 'button': {
@@ -1859,6 +1909,27 @@ export class SceneManager {
           const bz = new BuzzerMesh(pins[0], pins[1]);
           handle.buzzer = bz;
           group = bz.group;
+          break;
+        }
+        case 'relay-module': {
+          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
+          const rel = new RelayModuleMesh(center);
+          handle.relay = rel;
+          group = rel.group;
+          break;
+        }
+        case 'cooling-fan': {
+          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
+          const fan = new CoolingFanMesh(center);
+          handle.fan = fan;
+          this.activeCoolingFan = fan;
+          group = fan.group;
+          break;
+        }
+        default: {
+          const extra = createSandboxExtraMesh(part.type, pins);
+          handle.extra = extra;
+          group = extra.group;
           break;
         }
       }
@@ -1996,11 +2067,19 @@ export class SceneManager {
     this.activeButton?.setHovered(hitBtn);
 
     if (this.sandboxModeActive && this.sandboxTool !== 'delete') {
-      const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
-      if (ep && (this.sandboxTool === 'wire' || ep.kind === 'breadboard')) {
-        const pos = this.resolveEndpointWorld(ep);
-        this.hoverSnapRing.position.set(pos.x, pos.y + 0.05, pos.z);
-        this.hoverSnapRing.visible = true;
+      const showSnap =
+        this.sandboxTool === 'place' ||
+        this.sandboxTool === 'wire' ||
+        (this.sandboxTool === 'move' && this.selectedMovePartId !== null);
+      if (showSnap) {
+        const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
+        if (ep && (this.sandboxTool === 'wire' || ep.kind === 'breadboard')) {
+          const pos = this.resolveEndpointWorld(ep);
+          this.hoverSnapRing.position.set(pos.x, pos.y + 0.05, pos.z);
+          this.hoverSnapRing.visible = true;
+        } else {
+          this.hoverSnapRing.visible = false;
+        }
       } else {
         this.hoverSnapRing.visible = false;
       }
@@ -2018,7 +2097,13 @@ export class SceneManager {
       this.sandboxModeActive
     ) {
       this.renderer.domElement.style.cursor =
-        this.sandboxModeActive && this.sandboxTool === 'delete' ? 'crosshair' : 'pointer';
+        this.sandboxModeActive && this.sandboxTool === 'delete'
+          ? 'crosshair'
+          : this.sandboxModeActive && this.sandboxTool === 'move'
+            ? this.selectedMovePartId
+              ? 'grabbing'
+              : 'grab'
+            : 'pointer';
     } else {
       this.renderer.domElement.style.cursor = 'grab';
     }
@@ -2058,6 +2143,18 @@ export class SceneManager {
           if (this.sandboxTool === 'delete') {
             const target = this.pickSandboxDeleteItem(e.clientX, e.clientY);
             if (target) this.callbacks.onSandboxDeleteItem?.(target.kind, target.id);
+          } else if (this.sandboxTool === 'move') {
+            if (!this.selectedMovePartId) {
+              const target = this.pickSandboxDeleteItem(e.clientX, e.clientY);
+              if (target?.kind === 'part') {
+                this.callbacks.onSandboxPickPart?.(target.id);
+              }
+            } else {
+              const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
+              if (ep && ep.kind === 'breadboard') {
+                this.callbacks.onSandboxEndpointClick?.(ep);
+              }
+            }
           } else {
             const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
             if (ep) this.callbacks.onSandboxEndpointClick?.(ep);

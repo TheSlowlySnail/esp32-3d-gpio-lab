@@ -10,19 +10,20 @@ import type {
   WireEndpoint,
 } from './SandboxTypes';
 
-export const WIRE_COLORS = [
-  { id: 'red', label: 'Rot (+V)', hex: '#ef4444' },
-  { id: 'black', label: 'Schwarz (GND)', hex: '#1e293b' },
-  { id: 'cyan', label: 'Cyan (Signal)', hex: '#38bdf8' },
-  { id: 'yellow', label: 'Gelb (SCL/TX)', hex: '#facc15' },
-  { id: 'green', label: 'Grün (SDA/RX)', hex: '#22c55e' },
-  { id: 'orange', label: 'Orange (PWM)', hex: '#f97316' },
-] as const;
+export const WIRE_COLORS: Array<{ hex: string; label: string }> = [
+  { hex: '#ef4444', label: 'Rot (+V)' },
+  { hex: '#1e293b', label: 'Schwarz (GND)' },
+  { hex: '#38bdf8', label: 'Cyan (Signal)' },
+  { hex: '#facc15', label: 'Gelb (SCL/TX)' },
+  { hex: '#22c55e', label: 'Grün (SDA/RX)' },
+  { hex: '#f97316', label: 'Orange (PWM)' },
+];
 
 export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
+  // ===================== LEDs & AUSGABE (7) =====================
   {
     type: 'led-red',
-    name: '5mm LED Rot (2,0 V)',
+    name: 'LED Rot (5 mm)',
     shortName: 'LED Rot',
     category: 'LEDs & Ausgabe',
     colSpan: 2,
@@ -31,12 +32,12 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
       { dCol: 0, row: 'g', pinLabel: 'Anode (+)' },
       { dCol: 2, row: 'g', pinLabel: 'Kathode (−)' },
     ],
-    description: 'Leuchtet rot bei 2,0 V. Immer mit 220 Ω Vorwiderstand in Reihe schalten!',
+    description: 'Klassische rote 5-mm-LED (Vf = 2,0 V). Immer mit 220 Ω Vorwiderstand betreiben!',
     accentHex: '#ef4444',
   },
   {
     type: 'led-green',
-    name: '5mm LED Grün (2,2 V)',
+    name: 'LED Grün (5 mm)',
     shortName: 'LED Grün',
     category: 'LEDs & Ausgabe',
     colSpan: 2,
@@ -45,12 +46,12 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
       { dCol: 0, row: 'g', pinLabel: 'Anode (+)' },
       { dCol: 2, row: 'g', pinLabel: 'Kathode (−)' },
     ],
-    description: 'Grüne Status-LED (Vf = 2,2 V, Nennstrom 20 mA).',
+    description: 'Grüne Status-LED (Vf = 2,2 V) für Betriebsanzeigen und Ampeln.',
     accentHex: '#22c55e',
   },
   {
     type: 'led-blue',
-    name: '5mm LED Blau (3,0 V)',
+    name: 'LED Blau (5 mm)',
     shortName: 'LED Blau',
     category: 'LEDs & Ausgabe',
     colSpan: 2,
@@ -63,10 +64,72 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     accentHex: '#3b82f6',
   },
   {
+    type: 'led-yellow',
+    name: 'LED Gelb (5 mm)',
+    shortName: 'LED Gelb',
+    category: 'LEDs & Ausgabe',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Anode (+)' },
+      { dCol: 2, row: 'g', pinLabel: 'Kathode (−)' },
+    ],
+    description: 'Gelbe Warn- & Ampel-LED (Vf = 2,1 V). Ideal für Verkehrsampeln und Status-Blinker.',
+    accentHex: '#eab308',
+  },
+  {
+    type: 'led-rgb',
+    name: 'RGB-LED (4-Pin)',
+    shortName: 'RGB-LED',
+    category: 'LEDs & Ausgabe',
+    colSpan: 3,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Rot (R)' },
+      { dCol: 1, row: 'g', pinLabel: 'GND' },
+      { dCol: 2, row: 'g', pinLabel: 'Grün (G)' },
+      { dCol: 3, row: 'g', pinLabel: 'Blau (B)' },
+    ],
+    description: 'Dreifarbige RGB-LED mit gemeinsamer Kathode — mischt Millionen Farben über PWM.',
+    accentHex: '#ec4899',
+  },
+  {
+    type: 'neopixel-ring',
+    name: 'WS2812B NeoPixel-Ring (8 LEDs)',
+    shortName: 'NeoPixel-Ring',
+    category: 'LEDs & Ausgabe',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '5V/3V3' },
+      { dCol: 1, row: 'g', pinLabel: 'DIN' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Adressierbarer 8-LED-RGB-Ring (WLED / FastLED) mit nur einer Datenleitung!',
+    accentHex: '#a855f7',
+  },
+  {
+    type: 'laser-diode',
+    name: 'KY-008 650 nm Laser-Diode',
+    shortName: 'Laser-Diode',
+    category: 'LEDs & Ausgabe',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Signal (+)' },
+      { dCol: 1, row: 'g', pinLabel: 'NC' },
+      { dCol: 2, row: 'g', pinLabel: 'GND (−)' },
+    ],
+    description: 'Roter Punkt-Laser-Emitter (5 mW) — perfekt für Laser-Lichtschranken mit LDR!',
+    accentHex: '#dc2626',
+  },
+
+  // ===================== PASSIV & SCHALTER (8) =====================
+  {
     type: 'resistor-220',
     name: 'Widerstand 220 Ω (Vorwiderstand)',
     shortName: 'R 220 Ω',
-    category: 'Passiv & Taster',
+    category: 'Passiv & Schalter',
     colSpan: 6,
     preferredRow: 'h',
     pinOffsets: [
@@ -80,7 +143,7 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     type: 'resistor-10k',
     name: 'Widerstand 10 kΩ (Pull-Up / Down)',
     shortName: 'R 10 kΩ',
-    category: 'Passiv & Taster',
+    category: 'Passiv & Schalter',
     colSpan: 6,
     preferredRow: 'h',
     pinOffsets: [
@@ -91,10 +154,25 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     accentHex: '#f59e0b',
   },
   {
+    type: 'potentiometer',
+    name: 'Dreh-Potentiometer 10 kΩ',
+    shortName: 'Poti 10 kΩ',
+    category: 'Passiv & Schalter',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC' },
+      { dCol: 1, row: 'g', pinLabel: 'Schleifer' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Stufenloser Spannungsteiler (0–3,3 V) für Analog-Eingänge (ADC), Dimmer und Servo-Steuerung.',
+    accentHex: '#38bdf8',
+  },
+  {
     type: 'button',
     name: 'Kurzhub-Taster (SPST)',
     shortName: 'Taster',
-    category: 'Passiv & Taster',
+    category: 'Passiv & Schalter',
     colSpan: 2,
     preferredRow: 'f',
     pinOffsets: [
@@ -105,10 +183,25 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     accentHex: '#0ea5e9',
   },
   {
+    type: 'slide-switch',
+    name: 'Schiebeschalter (SPDT)',
+    shortName: 'Schalter',
+    category: 'Passiv & Schalter',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Ein' },
+      { dCol: 1, row: 'g', pinLabel: 'COM' },
+      { dCol: 2, row: 'g', pinLabel: 'Aus' },
+    ],
+    description: 'Rastender Schiebeschalter zum dauerhaften Ein-/Ausschalten von Stromkreisen.',
+    accentHex: '#64748b',
+  },
+  {
     type: 'capacitor',
     name: 'Elko 100 µF (Kondensator)',
     shortName: 'Elko 100 µF',
-    category: 'Passiv & Taster',
+    category: 'Passiv & Schalter',
     colSpan: 2,
     preferredRow: 'g',
     pinOffsets: [
@@ -118,6 +211,37 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     description: 'Elektrolyt-Kondensator zum Glätten von Spannungsspitzen und für RC-Filter.',
     accentHex: '#3b82f6',
   },
+  {
+    type: 'diode-1n4007',
+    name: 'Freilaufdiode 1N4007',
+    shortName: 'Diode 1N4007',
+    category: 'Passiv & Schalter',
+    colSpan: 4,
+    preferredRow: 'h',
+    pinOffsets: [
+      { dCol: 0, row: 'h', pinLabel: 'Anode' },
+      { dCol: 4, row: 'h', pinLabel: 'Kathode (Ring)' },
+    ],
+    description: 'Schützt ESP32/Pi vor induktiven Spannungsspitzen an Motoren, Lüftern und Relais.',
+    accentHex: '#94a3b8',
+  },
+  {
+    type: 'mosfet-irlz44n',
+    name: 'N-Kanal MOSFET (IRLZ44N)',
+    shortName: 'MOSFET',
+    category: 'Passiv & Schalter',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Gate (G)' },
+      { dCol: 1, row: 'g', pinLabel: 'Drain (D)' },
+      { dCol: 2, row: 'g', pinLabel: 'Source (S)' },
+    ],
+    description: 'Logic-Level-Leistungstransistor — schaltet große Lasten (Lüfter, LED-Strips, Motoren) per 3,3 V.',
+    accentHex: '#475569',
+  },
+
+  // ===================== SENSOREN (14) =====================
   {
     type: 'ldr',
     name: 'Fotowiderstand (LDR Lichtsensor)',
@@ -147,6 +271,21 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     ],
     description: 'Misst Temperatur, Luftfeuchtigkeit & Luftdruck digital über I²C (Adresse 0x76).',
     accentHex: '#a855f7',
+  },
+  {
+    type: 'dht22',
+    name: 'DHT22 Temperatur & Feuchte',
+    shortName: 'DHT22 Klima',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '3V3' },
+      { dCol: 1, row: 'g', pinLabel: 'DATA' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Beliebter weißer 1-Wire-Klimasensor (±0,5 °C, 0–100 % rF) für Wetterstationen & Smart Home.',
+    accentHex: '#e2e8f0',
   },
   {
     type: 'hcsr04',
@@ -182,10 +321,150 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     accentHex: '#10b981',
   },
   {
+    type: 'pir-hc501',
+    name: 'HC-SR501 PIR Bewegungsmelder',
+    shortName: 'PIR Melder',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC' },
+      { dCol: 1, row: 'g', pinLabel: 'OUT' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Passiv-Infrarot-Sensor mit weißer Fresnel-Kuppel — erkennt Körperwärme bis 7 m.',
+    accentHex: '#f8fafc',
+  },
+  {
+    type: 'mq2-gas',
+    name: 'MQ-2 Gas- & Rauchsensor',
+    shortName: 'MQ-2 Gas',
+    category: 'Sensoren',
+    colSpan: 3,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC' },
+      { dCol: 1, row: 'g', pinLabel: 'GND' },
+      { dCol: 2, row: 'g', pinLabel: 'DO' },
+      { dCol: 3, row: 'g', pinLabel: 'AO' },
+    ],
+    description: 'Metallgitter-Gassensor für Rauch, Propan, Methan und (sehr beliebt für Spaßprojekte) schlechte Luft!',
+    accentHex: '#ef4444',
+  },
+  {
+    type: 'soil-moisture',
+    name: 'Bodenfeuchte-Sensor (Kapazitiv)',
+    shortName: 'Bodenfeuchte',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '3V3' },
+      { dCol: 1, row: 'g', pinLabel: 'AOUT' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Korrosionsfreier Pflanzensensor — meldet sofort, wenn deine Zimmerpflanze Durst hat!',
+    accentHex: '#16a34a',
+  },
+  {
+    type: 'mpu6050',
+    name: 'MPU6050 6-Achsen Gyro/Accel (I²C)',
+    shortName: 'MPU6050 Gyro',
+    category: 'Sensoren',
+    colSpan: 3,
+    preferredRow: 'f',
+    pinOffsets: [
+      { dCol: 0, row: 'f', pinLabel: '3V3' },
+      { dCol: 1, row: 'f', pinLabel: 'GND' },
+      { dCol: 2, row: 'f', pinLabel: 'SCL' },
+      { dCol: 3, row: 'f', pinLabel: 'SDA' },
+    ],
+    description: '3-Achsen-Beschleunigung + 3-Achsen-Gyroskop über I²C (0x68) für Roboter, Neigung & Gesten.',
+    accentHex: '#3b82f6',
+  },
+  {
+    type: 'rfid-rc522',
+    name: 'MFRC522 RFID/NFC Leser',
+    shortName: 'RFID-RC522',
+    category: 'Sensoren',
+    colSpan: 3,
+    preferredRow: 'h',
+    pinOffsets: [
+      { dCol: 0, row: 'h', pinLabel: '3V3' },
+      { dCol: 1, row: 'h', pinLabel: 'GND' },
+      { dCol: 2, row: 'h', pinLabel: 'SDA/SS' },
+      { dCol: 3, row: 'h', pinLabel: 'SCK' },
+    ],
+    description: '13,56-MHz-RFID-Kartenleser für Zutrittskontrollen, Snack-Tresore & Jukeboxen (SPI).',
+    accentHex: '#1d4ed8',
+  },
+  {
+    type: 'touch-ttp223',
+    name: 'TTP223 Kapazitiver Touch-Sensor',
+    shortName: 'Touch-Pad',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC' },
+      { dCol: 1, row: 'g', pinLabel: 'I/O' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Berührungsempfindliche Taste ohne Mechanik — funktioniert sogar durch dünnes Plastik oder Holz.',
+    accentHex: '#e11d48',
+  },
+  {
+    type: 'sound-mic',
+    name: 'KY-037 Mikrofon / Klatsch-Sensor',
+    shortName: 'Mikrofon',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC' },
+      { dCol: 1, row: 'g', pinLabel: 'DO' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Elektret-Mikrofonmodul mit Schwellen-Poti für Klatsch-Schalter, Lärm-Ampeln & Schnarch-Detektor.',
+    accentHex: '#f97316',
+  },
+  {
+    type: 'hall-sensor',
+    name: 'Hall-Effekt Magnetsensor',
+    shortName: 'Hall-Sensor',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '3V3' },
+      { dCol: 1, row: 'g', pinLabel: 'OUT' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Erkennt Magnetfelder berührungslos — ideal für Tür-/Kühlschrankkontakte und Drehzahlmesser.',
+    accentHex: '#06b6d4',
+  },
+  {
+    type: 'rain-sensor',
+    name: 'Regen- / Wassertropfen-Sensor',
+    shortName: 'Regen-Sensor',
+    category: 'Sensoren',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '3V3' },
+      { dCol: 1, row: 'g', pinLabel: 'DO' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Leiterbahnen-Kamm erkennt Wassertropfen, Regen auf dem Balkon oder überlaufende Kaffeetassen.',
+    accentHex: '#0284c7',
+  },
+
+  // ===================== AKTOREN & DISPLAYS (7) =====================
+  {
     type: 'oled',
     name: 'SSD1306 I²C OLED (128×64)',
     shortName: 'OLED Display',
-    category: 'Aktoren & Display',
+    category: 'Aktoren & Displays',
     colSpan: 3,
     preferredRow: 'f',
     pinOffsets: [
@@ -198,10 +477,25 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     accentHex: '#06b6d4',
   },
   {
+    type: 'seven-seg',
+    name: '7-Segment LED-Anzeige',
+    shortName: '7-Segment',
+    category: 'Aktoren & Displays',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'VCC/SIG' },
+      { dCol: 1, row: 'g', pinLabel: 'CLK' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Leuchtende rote Ziffernanzeige für Countdown-Timer, Zähler und Spielstände.',
+    accentHex: '#ef4444',
+  },
+  {
     type: 'servo',
     name: 'SG90 Mikro-Servo (0°–180°)',
     shortName: 'SG90 Servo',
-    category: 'Aktoren & Display',
+    category: 'Aktoren & Displays',
     colSpan: 2,
     preferredRow: 'g',
     pinOffsets: [
@@ -216,15 +510,58 @@ export const SANDBOX_CATALOG: SandboxCatalogItem[] = [
     type: 'buzzer',
     name: 'Passiver Piezo-Buzzer',
     shortName: 'Piezo-Buzzer',
-    category: 'Aktoren & Display',
+    category: 'Aktoren & Displays',
     colSpan: 3,
     preferredRow: 'g',
     pinOffsets: [
       { dCol: 0, row: 'g', pinLabel: 'Signal (+)' },
       { dCol: 3, row: 'g', pinLabel: 'GND (−)' },
     ],
-    description: 'Erzeugt Töne und Warnsignale über Rechteck-Frequenzen.',
+    description: 'Erzeugt Töne, Melodien und Warnsignale über Rechteck-Frequenzen.',
     accentHex: '#f43f5e',
+  },
+  {
+    type: 'relay-module',
+    name: '5V Relais-Modul (1-Kanal)',
+    shortName: 'Relais-Modul',
+    category: 'Aktoren & Displays',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'IN' },
+      { dCol: 1, row: 'g', pinLabel: 'VCC' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Elektromechanisches Schaltrelais — schaltet Lampen, Kaffeemaschinen oder Pumpen galvanisch getrennt.',
+    accentHex: '#2563eb',
+  },
+  {
+    type: 'cooling-fan',
+    name: '5V PWM-Axiallüfter',
+    shortName: '5V Lüfter',
+    category: 'Aktoren & Displays',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '+5V/PWM' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Drehender 3D-Gehäuselüfter für Raspberry Pi Kühlung, Luftstrom-Experimente & Geruchs-Abzug.',
+    accentHex: '#0ea5e9',
+  },
+  {
+    type: 'vib-motor',
+    name: 'Vibrations-Motor (Haptik)',
+    shortName: 'Vibro-Motor',
+    category: 'Aktoren & Displays',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: '+3,3V/SIG' },
+      { dCol: 2, row: 'g', pinLabel: 'GND' },
+    ],
+    description: 'Kompakter Münz-Vibrationsmotor für stilles haptisches Feedback, Stuhl-Wecker & Wearables.',
+    accentHex: '#8b5cf6',
   },
 ];
 
@@ -313,8 +650,7 @@ export function getPartPinNets(part: PlacedPart): string[] {
 }
 
 /**
- * Wertet eine frei gebaute Sandbox-Schaltung physikalisch & logisch in Echtzeit aus!
- * Erkennt geschlossene Stromkreise, Vorwiderstände (vs. Überstrom!), Taster, Sensoren & Displays.
+ * Wertet eine frei gebaute Sandbox-Schaltung (36 Bauteil-Typen!) physikalisch & logisch in Echtzeit aus.
  */
 export function evaluateSandboxCircuit(
   state: SandboxState,
@@ -329,32 +665,38 @@ export function evaluateSandboxCircuit(
     uf.union(getElectricalNetId(w.from), getElectricalNetId(w.to));
   }
 
-  // 2. Closed tactile buttons bridge their two nets!
+  // 2. Closed tactile buttons & slide switches bridge their contacts
   for (const part of state.parts) {
-    if (part.type === 'button' && state.buttonPressed) {
-      const nets = getPartPinNets(part);
-      if (nets.length >= 2) uf.union(nets[0], nets[1]);
-    }
-  }
-
-  // Build adjacency of resistive bridges (220 Ohm / 10k Ohm / LDR)
-  const resistorEdges: Array<{ a: string; b: string; ohms: number }> = [];
-  for (const part of state.parts) {
-    if (part.type === 'resistor-220' || part.type === 'resistor-10k' || part.type === 'ldr') {
-      const nets = getPartPinNets(part);
-      if (nets.length >= 2) {
-        const ohms =
-          part.type === 'resistor-220'
-            ? 220
-            : part.type === 'resistor-10k'
-              ? 10000
-              : Math.round(100000 * Math.pow(500 / 100000, state.lightPercent / 100));
-        resistorEdges.push({ a: nets[0], b: nets[1], ohms });
+    const nets = getPartPinNets(part);
+    if (part.type === 'button' && state.buttonPressed && nets.length >= 2) {
+      uf.union(nets[0], nets[1]);
+    } else if (part.type === 'slide-switch' && nets.length >= 3) {
+      if (state.switchClosed) {
+        uf.union(nets[0], nets[1]);
+      } else {
+        uf.union(nets[1], nets[2]);
       }
     }
   }
 
-  // Helper: check if net connects to any powered source directly (0 Ohm) or via a resistor
+  // 3. Resistive bridges (220 Ohm / 10k Ohm / LDR / Potentiometer / Diode)
+  const resistorEdges: Array<{ a: string; b: string; ohms: number }> = [];
+  for (const part of state.parts) {
+    const nets = getPartPinNets(part);
+    if (part.type === 'resistor-220' && nets.length >= 2) {
+      resistorEdges.push({ a: nets[0], b: nets[1], ohms: 220 });
+    } else if (part.type === 'resistor-10k' && nets.length >= 2) {
+      resistorEdges.push({ a: nets[0], b: nets[1], ohms: 10000 });
+    } else if (part.type === 'ldr' && nets.length >= 2) {
+      const ohms = Math.round(100000 * Math.pow(500 / 100000, state.lightPercent / 100));
+      resistorEdges.push({ a: nets[0], b: nets[1], ohms });
+    } else if (part.type === 'potentiometer' && nets.length >= 3) {
+      const ratio = Math.max(0.05, Math.min(0.95, state.lightPercent / 100));
+      resistorEdges.push({ a: nets[0], b: nets[1], ohms: Math.round(10000 * (1 - ratio)) });
+      resistorEdges.push({ a: nets[1], b: nets[2], ohms: Math.round(10000 * ratio) });
+    }
+  }
+
   const highSources = ['board:3V3'];
   if (state.gpioHigh) {
     highSources.push('board:outA', 'board:outB', 'board:outC');
@@ -362,6 +704,16 @@ export function evaluateSandboxCircuit(
   const gndSources = ['board:GND'];
   if (!state.gpioHigh) {
     gndSources.push('board:outA');
+  }
+
+  // MOSFET conduction: if Gate is HIGH, Drain connects to Source!
+  for (const part of state.parts) {
+    if (part.type === 'mosfet-irlz44n') {
+      const nets = getPartPinNets(part);
+      if (nets.length >= 3 && highSources.some((s) => uf.connected(nets[0], s))) {
+        uf.union(nets[1], nets[2]);
+      }
+    }
   }
 
   const isDirectToAny = (net: string, targets: string[]) =>
@@ -386,8 +738,21 @@ export function evaluateSandboxCircuit(
     const nets = getPartPinNets(part);
     const def = getCatalogItem(part.type);
 
-    if (part.type === 'led-red' || part.type === 'led-green' || part.type === 'led-blue') {
-      const vf = part.type === 'led-red' ? 2.0 : part.type === 'led-green' ? 2.2 : 3.0;
+    // ---- 1) Single-Color 5mm LEDs ----
+    if (
+      part.type === 'led-red' ||
+      part.type === 'led-green' ||
+      part.type === 'led-blue' ||
+      part.type === 'led-yellow'
+    ) {
+      const vf =
+        part.type === 'led-red'
+          ? 2.0
+          : part.type === 'led-yellow'
+            ? 2.1
+            : part.type === 'led-green'
+              ? 2.2
+              : 3.0;
       const rHigh = findSeriesResistanceTo(nets[0], highSources);
       const rGnd = findSeriesResistanceTo(nets[1], gndSources);
 
@@ -425,6 +790,82 @@ export function evaluateSandboxCircuit(
       continue;
     }
 
+    // ---- 2) RGB LED ----
+    if (part.type === 'led-rgb') {
+      const hasGnd = findSeriesResistanceTo(nets[1], gndSources) !== null;
+      const rOn = findSeriesResistanceTo(nets[0], highSources) !== null;
+      const gOn = findSeriesResistanceTo(nets[2], highSources) !== null;
+      const bOn = findSeriesResistanceTo(nets[3], highSources) !== null;
+      const channels = (rOn ? 1 : 0) + (gOn ? 1 : 0) + (bOn ? 1 : 0);
+      const active = hasGnd && channels > 0;
+      const ma = active ? channels * 6.5 : 0;
+      if (active) {
+        totalCurrentMa += ma;
+        activePartsCount++;
+      }
+      partStates.set(part.id, {
+        partId: part.id,
+        powered: active,
+        active,
+        brightnessPct: active ? 95 : 0,
+        overcurrent: false,
+        currentMa: ma,
+        statusText: active
+          ? `RGB aktiv (${rOn ? 'R' : ''}${gOn ? 'G' : ''}${bOn ? 'B' : ''})`
+          : 'GND & mind. 1 Farbpin (R/G/B) anschließen',
+      });
+      continue;
+    }
+
+    // ---- 3) NeoPixel Ring (WS2812B 8 LEDs) ----
+    if (part.type === 'neopixel-ring') {
+      const powered =
+        findSeriesResistanceTo(nets[0], ['board:3V3']) !== null &&
+        findSeriesResistanceTo(nets[2], ['board:GND']) !== null;
+      const hasDin = isDirectToAny(nets[1], ['board:outA', 'board:outB', 'board:outC', 'board:3V3']);
+      const active = powered && hasDin;
+      if (active) {
+        totalCurrentMa += 88;
+        activePartsCount++;
+      }
+      partStates.set(part.id, {
+        partId: part.id,
+        powered,
+        active,
+        brightnessPct: active ? 100 : 0,
+        overcurrent: false,
+        currentMa: active ? 88 : 0,
+        statusText: active
+          ? 'Regenbogen-Animation (8× WS2812B)'
+          : powered
+            ? 'Strom OK — DIN noch an GPIO verbinden'
+            : '5V/3V3, DIN & GND anschließen',
+      });
+      continue;
+    }
+
+    // ---- 4) KY-008 Laser Diode ----
+    if (part.type === 'laser-diode') {
+      const active =
+        findSeriesResistanceTo(nets[0], highSources) !== null &&
+        findSeriesResistanceTo(nets[2], gndSources) !== null;
+      if (active) {
+        totalCurrentMa += 24;
+        activePartsCount++;
+      }
+      partStates.set(part.id, {
+        partId: part.id,
+        powered: active,
+        active,
+        brightnessPct: active ? 100 : 0,
+        overcurrent: false,
+        currentMa: active ? 24 : 0,
+        statusText: active ? '650 nm Laserstrahl AKTIV!' : 'Signal (+) & GND (−) anschließen',
+      });
+      continue;
+    }
+
+    // ---- 5) HLK-LD2490 24 GHz mmWave Radar ----
     if (part.type === 'ld2490') {
       const hasV = findSeriesResistanceTo(nets[0], ['board:3V3']) !== null;
       const hasGnd = findSeriesResistanceTo(nets[1], ['board:GND']) !== null;
@@ -453,7 +894,8 @@ export function evaluateSandboxCircuit(
       continue;
     }
 
-    if (part.type === 'oled' || part.type === 'bme280') {
+    // ---- 6) I2C Modules: OLED, BME280, MPU6050 ----
+    if (part.type === 'oled' || part.type === 'bme280' || part.type === 'mpu6050') {
       const gndNet = part.type === 'oled' ? nets[0] : nets[1];
       const vccNet = part.type === 'oled' ? nets[1] : nets[0];
       const sclNet = nets[2];
@@ -464,8 +906,9 @@ export function evaluateSandboxCircuit(
         findSeriesResistanceTo(gndNet, ['board:GND']) !== null;
       const hasI2c = isDirectToAny(sclNet, ['board:scl']) && isDirectToAny(sdaNet, ['board:sda']);
       const active = powered && hasI2c;
+      const ma = part.type === 'oled' ? 18 : part.type === 'mpu6050' ? 3.8 : 1.2;
       if (active) {
-        totalCurrentMa += part.type === 'oled' ? 18 : 1.2;
+        totalCurrentMa += ma;
         activePartsCount++;
         primaryVoltage = (elapsedSeconds * 8) % 1 < 0.25 ? 0.1 : 3.3;
       }
@@ -475,7 +918,7 @@ export function evaluateSandboxCircuit(
         active,
         brightnessPct: active ? 95 : 0,
         overcurrent: false,
-        currentMa: active ? (part.type === 'oled' ? 18 : 1.2) : 0,
+        currentMa: active ? ma : 0,
         statusText: active
           ? `${def.shortName} Online (I²C aktiv)`
           : powered
@@ -485,6 +928,7 @@ export function evaluateSandboxCircuit(
       continue;
     }
 
+    // ---- 7) HC-SR04 Ultrasonic ----
     if (part.type === 'hcsr04') {
       const powered =
         findSeriesResistanceTo(nets[0], ['board:3V3']) !== null &&
@@ -500,11 +944,99 @@ export function evaluateSandboxCircuit(
         brightnessPct: powered ? 100 : 0,
         overcurrent: false,
         currentMa: powered ? 15 : 0,
-        statusText: powered ? 'Ultraschall aktiv' : 'VCC & GND verbinden',
+        statusText: powered ? 'Ultraschall aktiv (~65 cm)' : 'VCC & GND verbinden',
       });
       continue;
     }
 
+    // ---- 8) 3-Pin & 4-Pin Active Sensors (DHT22, PIR, MQ-2, Soil, RFID, Touch, Sound, Hall, Rain) ----
+    if (
+      part.type === 'dht22' ||
+      part.type === 'pir-hc501' ||
+      part.type === 'mq2-gas' ||
+      part.type === 'soil-moisture' ||
+      part.type === 'rfid-rc522' ||
+      part.type === 'touch-ttp223' ||
+      part.type === 'sound-mic' ||
+      part.type === 'hall-sensor' ||
+      part.type === 'rain-sensor'
+    ) {
+      const gndIdx = part.type === 'mq2-gas' || part.type === 'rfid-rc522' ? 1 : 2;
+      const sigIdx = part.type === 'mq2-gas' || part.type === 'rfid-rc522' ? 2 : 1;
+      const powered =
+        findSeriesResistanceTo(nets[0], ['board:3V3']) !== null &&
+        findSeriesResistanceTo(nets[gndIdx], ['board:GND']) !== null;
+      const hasSig = isDirectToAny(nets[sigIdx], [
+        'board:inputA',
+        'board:adc',
+        'board:outA',
+        'board:outB',
+        'board:outC',
+        'board:sda',
+      ]);
+      const triggered = powered && state.sensorTriggered;
+      const ma =
+        part.type === 'mq2-gas'
+          ? 120
+          : part.type === 'rfid-rc522'
+            ? 26
+            : part.type === 'pir-hc501'
+              ? 3.2
+              : 4.5;
+      if (powered) {
+        totalCurrentMa += ma;
+        activePartsCount++;
+        if (hasSig) primaryVoltage = triggered ? 3.3 : 0.2;
+      }
+
+      const activeLabelMap: Record<string, string> = {
+        dht22: '23,4 °C · 48 % rF (1-Wire)',
+        'pir-hc501': triggered ? 'Bewegung erkannt! (OUT=HIGH)' : 'Überwacht Raum (Ruhe)',
+        'mq2-gas': triggered ? 'GAS / RAUCH ERKANNT!' : 'Luftqualität sauber',
+        'soil-moisture': triggered ? 'Erde TROCKEN — Gießen!' : 'Bodenfeuchte OK (64 %)',
+        'rfid-rc522': triggered ? 'RFID-Karte erkannt (#A4F2)' : 'Warte auf NFC-Chip…',
+        'touch-ttp223': triggered ? 'Berührung erkannt!' : 'Touch-Pad bereit',
+        'sound-mic': triggered ? 'Klatschen / Lärm erkannt!' : 'Umgebung ruhig',
+        'hall-sensor': triggered ? 'Magnetfeld erkannt!' : 'Kein Magnet in Nähe',
+        'rain-sensor': triggered ? 'Wassertropfen erkannt!' : 'Sensorfläche trocken',
+      };
+
+      partStates.set(part.id, {
+        partId: part.id,
+        powered,
+        active: triggered || (powered && part.type === 'dht22'),
+        brightnessPct: triggered ? 100 : powered ? 35 : 0,
+        overcurrent: false,
+        currentMa: powered ? ma : 0,
+        statusText: powered
+          ? activeLabelMap[part.type] ?? 'Sensor aktiv'
+          : '3V3 & GND noch anschließen',
+      });
+      continue;
+    }
+
+    // ---- 9) 7-Segment LED Display ----
+    if (part.type === 'seven-seg') {
+      const active =
+        findSeriesResistanceTo(nets[0], highSources) !== null &&
+        findSeriesResistanceTo(nets[2], gndSources) !== null;
+      if (active) {
+        totalCurrentMa += 28;
+        activePartsCount++;
+      }
+      partStates.set(part.id, {
+        partId: part.id,
+        powered: active,
+        active,
+        brightnessPct: active ? 95 : 0,
+        overcurrent: false,
+        currentMa: active ? 28 : 0,
+        statusText: active ? 'Zähler aktiv (0–9)' : 'VCC & GND verbinden',
+      });
+      continue;
+    }
+
+    // ---- 10) SG90 Servo ----
     if (part.type === 'servo') {
       const powered =
         findSeriesResistanceTo(nets[1], ['board:3V3']) !== null &&
@@ -527,12 +1059,14 @@ export function evaluateSandboxCircuit(
       continue;
     }
 
-    if (part.type === 'buzzer') {
+    // ---- 11) Buzzer, 5V Fan, Vibro-Motor ----
+    if (part.type === 'buzzer' || part.type === 'cooling-fan' || part.type === 'vib-motor') {
       const rHigh = findSeriesResistanceTo(nets[0], highSources);
       const rGnd = findSeriesResistanceTo(nets[1], gndSources);
       const active = rHigh !== null && rGnd !== null;
+      const ma = part.type === 'cooling-fan' ? 140 : part.type === 'vib-motor' ? 65 : 9;
       if (active) {
-        totalCurrentMa += 9;
+        totalCurrentMa += ma;
         activePartsCount++;
       }
       partStates.set(part.id, {
@@ -541,17 +1075,58 @@ export function evaluateSandboxCircuit(
         active,
         brightnessPct: active ? 100 : 0,
         overcurrent: false,
-        currentMa: active ? 9 : 0,
-        statusText: active ? 'Piezo aktiv (Ton)' : 'Signal (+) & GND (−) verbinden',
+        currentMa: active ? ma : 0,
+        statusText: active
+          ? part.type === 'cooling-fan'
+            ? 'Lüfter dreht (100 %)'
+            : part.type === 'vib-motor'
+              ? 'Vibriert aktiv!'
+              : 'Piezo aktiv (Ton)'
+          : 'Plus/Signal & GND verbinden',
       });
       continue;
     }
 
-    // Passive parts (resistors, button, cap, ldr)
+    // ---- 12) 5V Relay Module ----
+    if (part.type === 'relay-module') {
+      const powered =
+        findSeriesResistanceTo(nets[1], ['board:3V3']) !== null &&
+        findSeriesResistanceTo(nets[2], ['board:GND']) !== null;
+      const triggered = powered && findSeriesResistanceTo(nets[0], highSources) !== null;
+      if (triggered) {
+        totalCurrentMa += 72;
+        activePartsCount++;
+      }
+      partStates.set(part.id, {
+        partId: part.id,
+        powered,
+        active: triggered,
+        brightnessPct: triggered ? 100 : 0,
+        overcurrent: false,
+        currentMa: triggered ? 72 : 0,
+        statusText: triggered
+          ? 'Relais ANZIEHEND (KLICK · Kontakt zu)'
+          : powered
+            ? 'Versorgt (IN-Signal HIGH schaltet Relais)'
+            : 'IN, VCC & GND anschließen',
+      });
+      continue;
+    }
+
+    // ---- 13) Passive Parts (Resistors, Poti, Button, Switch, Cap, Diode, LDR, MOSFET) ----
+    const isMosfetOn =
+      part.type === 'mosfet-irlz44n' && highSources.some((s) => uf.connected(nets[0], s));
     partStates.set(part.id, {
       partId: part.id,
       powered: true,
-      active: part.type === 'button' ? state.buttonPressed : true,
+      active:
+        part.type === 'button'
+          ? state.buttonPressed
+          : part.type === 'slide-switch'
+            ? state.switchClosed
+            : part.type === 'mosfet-irlz44n'
+              ? isMosfetOn
+              : true,
       brightnessPct: 0,
       overcurrent: false,
       currentMa: 0,
@@ -560,7 +1135,15 @@ export function evaluateSandboxCircuit(
           ? state.buttonPressed
             ? 'Gedrückt (Kontakt geschlossen)'
             : 'Bereit (in 3D anklicken / Leertaste)'
-          : `Eingesteckt bei Spalte ${part.col}`,
+          : part.type === 'slide-switch'
+            ? state.switchClosed
+              ? 'Schalter EIN (Pin 1 ↔ COM)'
+              : 'Schalter AUS (COM ↔ Pin 3)'
+            : part.type === 'mosfet-irlz44n'
+              ? isMosfetOn
+                ? 'Gate HIGH → Drain↔Source leitend'
+                : 'Gate LOW → Sperrend'
+              : `Eingesteckt bei Spalte ${part.col}`,
     });
   }
 
@@ -568,10 +1151,10 @@ export function evaluateSandboxCircuit(
   let statusTone: SandboxSimSummary['statusTone'] = 'info';
   let whatHappens =
     state.parts.length === 0
-      ? 'Das Steckbrett ist noch leer — wähle rechts ein Bauteil oder Sensor aus und klicke auf ein Steckbrett-Loch!'
+      ? 'Das Steckbrett ist noch leer — wähle rechts aus 36 Bauteilen & Sensoren aus und klicke auf ein Steckbrett-Loch!'
       : `${state.parts.length} Bauteil(e) und ${state.wires.length} Jumperkabel platziert (${activePartsCount} aktiv).`;
   let whyItHappens =
-    'Jede 5er-Spalte auf dem Steckbrett (a–e bzw. f–j) ist intern leitend verbunden. Ziehe Jumperkabel vom Board zu den Bauteilen, um einen geschlossenen Stromkreis nach GND zu bauen!';
+    'Jede 5er-Spalte auf dem Steckbrett (a–e bzw. f–j) ist intern leitend verbunden. Du kannst Teile jederzeit mit ✋ Verschieben umstecken oder mit 🗑 Löschen entfernen!';
 
   if (overcurrentAlert) {
     statusBadge = 'ÜBERSTROM-WARNUNG!';
@@ -611,5 +1194,7 @@ export function createStarterSandboxState(): SandboxState {
     lightPercent: 55,
     servoAngleDeg: 90,
     radarPresent: true,
+    sensorTriggered: true,
+    switchClosed: true,
   };
 }

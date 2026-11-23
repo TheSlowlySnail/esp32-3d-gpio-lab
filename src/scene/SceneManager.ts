@@ -10,7 +10,7 @@ import type {
   SimulationResult,
   ThemeMode,
 } from '../engine/types';
-import { formatEndpointLabel, getCatalogItem } from '../sandbox/SandboxEngine';
+import { formatEndpointLabel, getCatalogItem, normalizePartRow } from '../sandbox/SandboxEngine';
 import type {
   HighlightMarker,
   SandboxSimSummary,
@@ -1858,7 +1858,9 @@ export class SceneManager {
 
     for (const part of state.parts) {
       const def = getCatalogItem(part.type);
-      const pins = def.pinOffsets.map((po) => hole(part.col + po.dCol, po.row));
+      const effectiveRow = normalizePartRow(part.row);
+      const pins = def.pinOffsets.map((po) => hole(part.col + po.dCol, effectiveRow));
+      const partCenter = hole(part.col + Math.floor(def.colSpan / 2), effectiveRow);
       let group: THREE.Group | null = null;
       const handle: NonNullable<ReturnType<typeof this.sandboxPartHandles.get>> = {
         type: part.type,
@@ -1892,8 +1894,7 @@ export class SceneManager {
           break;
         }
         case 'button': {
-          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
-          const btn = new ButtonMesh(center);
+          const btn = new ButtonMesh(partCenter);
           handle.button = btn;
           this.activeButton = btn;
           group = btn.group;
@@ -1935,8 +1936,7 @@ export class SceneManager {
           break;
         }
         case 'servo': {
-          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
-          const srv = new ServoMesh(center);
+          const srv = new ServoMesh(partCenter);
           handle.servo = srv;
           this.activeServo = srv;
           group = srv.group;
@@ -1949,15 +1949,13 @@ export class SceneManager {
           break;
         }
         case 'relay-module': {
-          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
-          const rel = new RelayModuleMesh(center);
+          const rel = new RelayModuleMesh(partCenter);
           handle.relay = rel;
           group = rel.group;
           break;
         }
         case 'cooling-fan': {
-          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
-          const fan = new CoolingFanMesh(center);
+          const fan = new CoolingFanMesh(partCenter);
           handle.fan = fan;
           this.activeCoolingFan = fan;
           group = fan.group;
@@ -1974,10 +1972,10 @@ export class SceneManager {
       if (group) {
         const hoverInfo: HoverPartInfo = {
           partId: part.id,
-          name: `${def.name} (Spalte ${part.col})`,
+          name: `${def.name} (${part.col}${effectiveRow})`,
           categoryLabel: def.category,
           description: def.description,
-          specLine: `Pins: ${def.pinOffsets.map((po) => `${part.col + po.dCol}${po.row} (${po.pinLabel})`).join(' · ')}`,
+          specLine: `Pins: ${def.pinOffsets.map((po) => `${part.col + po.dCol}${effectiveRow} (${po.pinLabel})`).join(' · ')}`,
           removable: false,
           isRemoved: false,
         };
@@ -2111,7 +2109,11 @@ export class SceneManager {
       if (showSnap) {
         const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
         if (ep && (this.sandboxTool === 'wire' || ep.kind === 'breadboard')) {
-          const pos = this.resolveEndpointWorld(ep);
+          const snapEp =
+            this.sandboxTool !== 'wire' && ep.kind === 'breadboard' && ep.row
+              ? { ...ep, row: normalizePartRow(ep.row) }
+              : ep;
+          const pos = this.resolveEndpointWorld(snapEp);
           this.hoverSnapRing.position.set(pos.x, pos.y + 0.05, pos.z);
           this.hoverSnapRing.visible = true;
         } else {

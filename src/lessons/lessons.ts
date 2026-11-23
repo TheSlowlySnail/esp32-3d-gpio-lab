@@ -5,6 +5,7 @@ import type {
   EspBoardId,
   RemovablePartDef,
 } from '../engine/types';
+import { buildExpandedLessons } from './ExpandedLessons';
 
 export interface LessonFormula {
   label: string;
@@ -23,10 +24,13 @@ export type LessonCategory =
   | 'Sensoren & Busse'
   | 'Aktoren'
   | 'WLED & LED-Streifen'
-  | 'Raspberry Pi';
+  | 'Raspberry Pi'
+  | 'Arduino Praxis'
+  | 'Smart Home & IoT';
 
 export interface LessonDefinition {
-  id: CircuitTopologyId;
+  id: string;
+  topology?: CircuitTopologyId;
   number: string;
   title: string;
   shortTitle: string;
@@ -58,7 +62,7 @@ const WLED_CAMERA: { position: [number, number, number]; target: [number, number
   target: [-1.35, 0.5, 0.25],
 };
 
-export const LESSONS: LessonDefinition[] = [
+const BASE_LESSONS: LessonDefinition[] = [
   {
     id: 'led-resistor',
     number: '01',
@@ -908,7 +912,9 @@ export const LESSONS: LessonDefinition[] = [
   },
 ];
 
-export function getLessonById(id: CircuitTopologyId): LessonDefinition {
+export const LESSONS: LessonDefinition[] = [...BASE_LESSONS, ...buildExpandedLessons(BASE_LESSONS)];
+
+export function getLessonById(id: string): LessonDefinition {
   return LESSONS.find((l) => l.id === id) ?? LESSONS[0];
 }
 

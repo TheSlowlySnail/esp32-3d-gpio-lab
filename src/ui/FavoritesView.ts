@@ -1,14 +1,13 @@
-import type { CircuitTopologyId } from '../engine/types';
 import { LESSONS } from '../lessons/lessons';
 import { FUNNY_IDEAS, type FunnyIdea } from '../sandbox/FunnyIdeas';
 import type { FavoriteKind, FavoritesStore } from '../sandbox/FavoritesStore';
 import { GUIDED_PROJECTS } from '../sandbox/GuidedProjects';
-import { SANDBOX_CATALOG } from '../sandbox/SandboxEngine';
+import { getPartIcon, SANDBOX_CATALOG } from '../sandbox/SandboxEngine';
 import type { SandboxPartType } from '../sandbox/SandboxTypes';
 
 export interface FavoritesViewCallbacks {
   onOpenPartInSandbox: (type: SandboxPartType) => void;
-  onOpenLesson: (id: CircuitTopologyId) => void;
+  onOpenLesson: (id: string) => void;
   onOpenGuidedProject: (projectId: string) => void;
   onLoadFunnyIdea: (idea: FunnyIdea) => void;
   onToggleFavorite: (kind: FavoriteKind, id: string) => void;
@@ -146,7 +145,7 @@ export class FavoritesView {
                       <div class="flex flex-col gap-1.5">
                         <div class="flex items-start justify-between gap-2">
                           <div class="flex items-center gap-2 min-w-0">
-                            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${p.accentHex}"></span>
+                            <span class="text-sm leading-none shrink-0">${getPartIcon(p)}</span>
                             <span class="text-xs font-bold eng-text-main truncate">${p.name}</span>
                           </div>
                           <button type="button" data-fav-toggle="part:${p.type}" title="Aus Favoriten entfernen" class="text-amber-400 hover:opacity-70 text-sm cursor-pointer shrink-0">★</button>
@@ -286,7 +285,7 @@ export class FavoritesView {
 
     this.container.querySelectorAll<HTMLButtonElement>('[data-fav-open-lesson]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        this.callbacks.onOpenLesson(btn.dataset.favOpenLesson as CircuitTopologyId);
+        this.callbacks.onOpenLesson(btn.dataset.favOpenLesson!);
       });
     });
 

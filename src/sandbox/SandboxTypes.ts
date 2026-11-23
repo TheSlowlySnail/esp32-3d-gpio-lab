@@ -45,6 +45,7 @@ export interface SandboxCatalogItem {
   type: SandboxPartType;
   name: string;
   shortName: string;
+  icon?: string;
   category: SandboxCategory;
   colSpan: number; // wie viele Spalten das Bauteil überspannt
   preferredRow: string;

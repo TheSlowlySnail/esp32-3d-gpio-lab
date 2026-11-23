@@ -14,7 +14,7 @@ import type {
   WledEffectId,
   WledPowerSourceId,
 } from '../engine/types';
-import type { LessonDefinition } from '../lessons/lessons';
+import { LESSONS, type LessonDefinition } from '../lessons/lessons';
 
 export interface ControlsCallbacks {
   onParamsChange: (patch: Partial<CircuitParameters>) => void;
@@ -255,7 +255,7 @@ export class ControlsPanel {
         <!-- Lesson Header -->
         <div>
           <div class="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider eng-text-accent">
-            <span>Lektion ${lesson.number} / 19</span>
+            <span>Lektion ${lesson.number} / ${LESSONS.length}</span>
             <span class="opacity-50">•</span>
             <span class="eng-text-muted">${lesson.category}</span>
           </div>
@@ -299,7 +299,8 @@ export class ControlsPanel {
   }
 
   private buildTopologyControls(lesson: LessonDefinition, params: CircuitParameters): string {
-    switch (lesson.id) {
+    void lesson;
+    switch (params.topology) {
       case 'led-resistor': {
         const colorChips = (Object.keys(LED_SPECS) as LedColorId[])
           .map((id) => {

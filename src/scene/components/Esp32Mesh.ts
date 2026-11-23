@@ -67,8 +67,8 @@ export class Esp32Mesh {
       ctx.lineWidth = 5;
       ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
 
-      // Gold PCB meander antenna for non-ceramic boards (skip on Raspberry Pi SBCs)
-      if (!hasCeramicAntenna && this.spec.family !== 'raspberry-pi-sbc') {
+      // Gold PCB meander antenna for non-ceramic ESP boards (skip on Raspberry Pi SBCs & classic Arduinos)
+      if (!hasCeramicAntenna && this.spec.family !== 'raspberry-pi-sbc' && this.spec.family !== 'arduino') {
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 10;
         const topY = 44;
@@ -99,9 +99,13 @@ export class Esp32Mesh {
       ctx.fillText(
         this.spec.family === 'raspberry-pi-sbc'
           ? 'LINUX SBC • 40-PIN GPIO'
-          : isMini
-            ? 'MINI • 3.3V LOGIC'
-            : `${this.spec.esphomeVariant} • 3.3V`,
+          : this.spec.family === 'arduino'
+            ? this.spec.id === 'arduino-nano-esp32'
+              ? 'ARDUINO • 3.3V ESP32-S3'
+              : 'ARDUINO • 5V LOGIC'
+            : isMini
+              ? 'MINI • 3.3V LOGIC'
+              : `${this.spec.esphomeVariant} • 3.3V`,
         canvas.width / 2,
         canvas.height - 125,
       );

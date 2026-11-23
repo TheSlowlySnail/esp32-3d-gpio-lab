@@ -25,6 +25,7 @@ import {
   createStarterSandboxState,
   evaluateSandboxCircuit,
   getCatalogItem,
+  normalizePartRow,
   SANDBOX_CATALOG,
 } from './sandbox/SandboxEngine';
 import type {
@@ -140,6 +141,7 @@ class LearnEsp32App {
   private readonly root: HTMLElement;
   private readonly solver = new CircuitSolver();
   private params: CircuitParameters = createInitialCircuitParameters();
+  private activeLessonId = 'led-resistor';
   private theme: ThemeMode = 'dark';
   private roomDimmed = false;
 
@@ -217,6 +219,8 @@ class LearnEsp32App {
       'Aktoren',
       'WLED & LED-Streifen',
       'Raspberry Pi',
+      'Arduino Praxis',
+      'Smart Home & IoT',
     ];
 
     const lessonOptionsHtml = categories
@@ -240,6 +244,9 @@ class LearnEsp32App {
     const rpiMcus = ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-mcu')
       .map((b) => `<option value="${b.id}">${b.name} [MCU]</option>`)
       .join('');
+    const arduinoBoards = ESP_BOARDS.filter((b) => b.family === 'arduino')
+      .map((b) => `<option value="${b.id}">${b.name}${b.isMini ? ' [MINI]' : ''}</option>`)
+      .join('');
 
     const registryCount = defaultComponentRegistry.getAll().length;
     const boardCount = ESP_BOARDS.length;
@@ -259,10 +266,10 @@ class LearnEsp32App {
             <div class="flex items-center gap-1.5">
               <h1 class="text-sm font-bold tracking-tight eng-text-main">Learn ESP &amp; Pi 3D</h1>
               <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 eng-text-accent border border-cyan-500/30">
-                19 LABS
+                ${LESSONS.length} LABS
               </span>
             </div>
-            <p class="text-[10.5px] eng-text-muted">${boardCount} Boards (ESP32 &amp; Raspberry Pi) · WLED</p>
+            <p class="text-[10.5px] eng-text-muted">${boardCount} Boards (ESP32, Raspberry Pi &amp; Arduino)</p>
           </div>
         </div>
 
@@ -282,6 +289,7 @@ class LearnEsp32App {
             <select data-select="board" aria-label="Mikrocomputer auswählen" class="eng-select eng-input px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium cursor-pointer max-w-[205px] focus:outline-none focus:border-cyan-500">
               <optgroup label="ESP32 Standard DevKits">${espStandard}</optgroup>
               <optgroup label="ESP32 Mini-Boards">${espMinis}</optgroup>
+              <optgroup label="Arduino Boards (5)">${arduinoBoards}</optgroup>
               <optgroup label="Raspberry Pi (Linux SBC)">${rpiSbcs}</optgroup>
               <optgroup label="Raspberry Pi (Mikrocontroller)">${rpiMcus}</optgroup>
             </select>
@@ -724,6 +732,11 @@ class LearnEsp32App {
 
     const groups = [
       {
+        title: 'Arduino — Die Kult-Mikrocontroller (5 Boards)',
+        subtitle: 'Robuste 5-V-Klassiker (UNO R4, Nano, Mega 2560, Pro Micro USB-HID) bis hin zum modernen Arduino Nano ESP32.',
+        items: ESP_BOARDS.filter((b) => b.family === 'arduino'),
+      },
+      {
         title: 'Raspberry Pi — Einplatinencomputer (Linux SBC)',
         subtitle: 'Vollwertige Linux-Computer mit 40-Pin-GPIO-Leiste, Python (gpiozero), HDMI, Netzwerk & eigenem Betriebssystem.',
         items: ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-sbc'),
@@ -767,10 +780,12 @@ class LearnEsp32App {
                     <span class="text-[9.5px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 ${
                       b.family === 'raspberry-pi-sbc'
                         ? 'bg-pink-500/15 text-pink-500 border-pink-500/40'
-                        : b.isMini
-                          ? 'bg-orange-500/15 text-orange-500 border-orange-500/40'
-                          : 'bg-cyan-500/15 eng-text-accent border-cyan-500/40'
-                    }">${b.family === 'raspberry-pi-sbc' ? 'LINUX SBC' : b.isMini ? 'MINI' : 'MCU'}</span>
+                        : b.family === 'arduino'
+                          ? 'bg-teal-500/15 text-teal-400 border-teal-500/40'
+                          : b.isMini
+                            ? 'bg-orange-500/15 text-orange-500 border-orange-500/40'
+                            : 'bg-cyan-500/15 eng-text-accent border-cyan-500/40'
+                    }">${b.family === 'raspberry-pi-sbc' ? 'LINUX SBC' : b.family === 'arduino' ? 'ARDUINO' : b.isMini ? 'MINI' : 'MCU'}</span>
                   </div>
                   <p class="text-[11px] eng-text-body leading-relaxed">${b.overview}</p>
                   <div class="pt-1.5 border-t border-slate-500/20 flex flex-col gap-1 text-[10.5px]">
@@ -977,23 +992,23 @@ class LearnEsp32App {
     });
 
     this.lessonSelectEl.addEventListener('change', () => {
-      this.selectLesson(this.lessonSelectEl.value as CircuitTopologyId, false);
+      this.selectLesson(this.lessonSelectEl.value, false);
     });
 
     this.root.querySelector('[data-action="prev-lesson"]')?.addEventListener('click', () => {
-      const idx = LESSONS.findIndex((l) => l.id === this.params.topology);
+      const idx = LESSONS.findIndex((l) => l.id === this.activeLessonId);
       const prev = LESSONS[(idx - 1 + LESSONS.length) % LESSONS.length];
       this.selectLesson(prev.id, false);
     });
 
     this.root.querySelector('[data-action="next-lesson"]')?.addEventListener('click', () => {
-      const idx = LESSONS.findIndex((l) => l.id === this.params.topology);
+      const idx = LESSONS.findIndex((l) => l.id === this.activeLessonId);
       const next = LESSONS[(idx + 1) % LESSONS.length];
       this.selectLesson(next.id, false);
     });
 
     this.lessonFavBtnEl.addEventListener('click', () => {
-      this.handleToggleFavorite('lesson', this.params.topology);
+      this.handleToggleFavorite('lesson', this.activeLessonId);
     });
 
     this.boardSelectEl.addEventListener('change', () => {
@@ -1058,7 +1073,7 @@ class LearnEsp32App {
 
     this.root.querySelector('[data-action="reset-camera"]')?.addEventListener('click', () => {
       if (this.appMode === 'lessons') {
-        const lesson = getLessonById(this.params.topology);
+        const lesson = getLessonById(this.activeLessonId);
         this.sceneManager.focusCamera(lesson.cameraPreset.position, lesson.cameraPreset.target);
       } else {
         this.sceneManager.focusCamera([1.4, 11.4, 10.6], [1.1, 0.35, 0.35]);
@@ -1159,7 +1174,7 @@ class LearnEsp32App {
   }
 
   private updateLessonFavButtonUi(): void {
-    const isFav = this.favorites.has('lesson', this.params.topology);
+    const isFav = this.favorites.has('lesson', this.activeLessonId);
     this.lessonFavBtnEl.textContent = isFav ? '★' : '☆';
     this.lessonFavBtnEl.title = isFav
       ? 'Lektion aus Favoriten entfernen'
@@ -1243,13 +1258,13 @@ class LearnEsp32App {
 
     if (this.appMode === 'lessons') {
       this.modeSubbarHintEl.textContent =
-        '19 fertige Schaltungen mit Live-Physik, Oszilloskop & Code-Generator';
+        `${LESSONS.length} fertige Schaltungen mit Live-Physik, Oszilloskop & Code-Generator`;
       this.modeLegendEl.innerHTML = `
         <span>Hover: Bauteil-Info</span>
         <span class="opacity-40">•</span>
         <span>Klick auf Bauteil: Entfernen/Einsetzen</span>
         <span class="opacity-40">•</span>
-        <span data-hint="interactive" class="eng-text-accent">${getLessonById(this.params.topology).getPrimaryPin(this.params.boardId)} · Live</span>
+        <span data-hint="interactive" class="eng-text-accent">${getLessonById(this.activeLessonId).getPrimaryPin(this.params.boardId)} · Live</span>
       `;
     } else if (this.appMode === 'sandbox') {
       this.modeSubbarHintEl.textContent =
@@ -1334,19 +1349,21 @@ class LearnEsp32App {
       return;
     }
 
-    // Free Sandbox Mode: Move selected part to clicked column
+    // Free Sandbox Mode: Move selected part to exact clicked column & row!
     if (this.sandboxTool === 'move') {
       if (!this.selectedMovePartId || endpoint.kind !== 'breadboard' || endpoint.col === undefined) {
         return;
       }
       const moveId = this.selectedMovePartId;
+      const targetRow = normalizePartRow(endpoint.row ?? 'g');
       this.sandboxState = {
         ...this.sandboxState,
         parts: this.sandboxState.parts.map((p) => {
           if (p.id !== moveId) return p;
           const item = getCatalogItem(p.type);
-          const col = Math.max(1, Math.min(30 - item.colSpan, endpoint.col!));
-          return { ...p, col };
+          const centeredCol = Math.round(endpoint.col! - item.colSpan / 2);
+          const col = Math.max(1, Math.min(30 - item.colSpan, centeredCol));
+          return { ...p, col, row: targetRow };
         }),
       };
       this.selectedMovePartId = null;
@@ -1354,16 +1371,18 @@ class LearnEsp32App {
       return;
     }
 
-    // Free Sandbox Mode: Place new part
+    // Free Sandbox Mode: Place new part dead-center on exact clicked column & row!
     if (this.sandboxTool === 'place') {
       if (endpoint.kind !== 'breadboard' || endpoint.col === undefined) return;
       const item = getCatalogItem(this.selectedPartType);
-      const col = Math.max(1, Math.min(30 - item.colSpan, endpoint.col));
+      const centeredCol = Math.round(endpoint.col - item.colSpan / 2);
+      const col = Math.max(1, Math.min(30 - item.colSpan, centeredCol));
+      const row = normalizePartRow(endpoint.row ?? item.preferredRow);
       const newPart: PlacedPart = {
         id: `part-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         type: this.selectedPartType,
         col,
-        row: item.preferredRow,
+        row,
       };
       this.sandboxState = {
         ...this.sandboxState,
@@ -1424,18 +1443,20 @@ class LearnEsp32App {
   private selectBoard(boardId: EspBoardId): void {
     this.params = { ...this.params, boardId };
     this.boardSelectEl.value = boardId;
-    const lesson = getLessonById(this.params.topology);
+    const lesson = getLessonById(this.activeLessonId);
     this.controlsPanel.render(lesson, this.params);
     this.stepSimulation(true);
   }
 
-  private selectLesson(id: CircuitTopologyId, isInitial: boolean): void {
+  private selectLesson(id: string, isInitial: boolean): void {
     const lesson = getLessonById(id);
+    this.activeLessonId = lesson.id;
+    const topology = lesson.topology ?? (lesson.id as CircuitTopologyId);
     this.solver.resetDynamicState();
 
-    // Auto-select a recommended Raspberry Pi board when entering a Raspberry Pi lesson from an ESP32
+    // Auto-select recommended board (Arduino / Raspberry Pi / ESP32) if lesson specifies one
     let nextBoardId = this.params.boardId;
-    if (lesson.recommendedBoardId && !this.params.boardId.startsWith('rpi-')) {
+    if (lesson.recommendedBoardId) {
       nextBoardId = lesson.recommendedBoardId;
       this.boardSelectEl.value = nextBoardId;
     }
@@ -1444,22 +1465,22 @@ class LearnEsp32App {
       ...this.params,
       ...lesson.defaultParams,
       boardId: nextBoardId,
-      topology: id,
+      topology,
       removedParts: [],
       buttonPressed: false,
     };
 
-    this.lessonSelectEl.value = id;
+    this.lessonSelectEl.value = lesson.id;
     this.updateLessonFavButtonUi();
     this.hoverTooltipEl.classList.add('hidden');
 
     const hintEl = this.root.querySelector('[data-hint="interactive"]');
     if (hintEl) {
-      if (id === 'button-pull') {
+      if (topology === 'button-pull') {
         hintEl.textContent = '3D-Taster drücken oder Pull-R entfernen';
-      } else if (id === 'ld2490-radar') {
+      } else if (topology === 'ld2490-radar') {
         hintEl.textContent = 'LD2490 24 GHz mmWave Radar aktiv';
-      } else if (id.startsWith('wled-')) {
+      } else if (topology.startsWith('wled-')) {
         hintEl.textContent = `WLED ${this.params.wledLedCount} LEDs · Klicke Bauteile zum Entfernen`;
       } else {
         hintEl.textContent = `${lesson.getPrimaryPin(this.params.boardId)} · Live`;
@@ -1477,7 +1498,7 @@ class LearnEsp32App {
 
   private updateParams(patch: Partial<CircuitParameters>): void {
     this.params = { ...this.params, ...patch };
-    const lesson = getLessonById(this.params.topology);
+    const lesson = getLessonById(this.activeLessonId);
     this.controlsPanel.render(lesson, this.params);
     this.stepSimulation(true);
   }
@@ -1492,7 +1513,7 @@ class LearnEsp32App {
 
     if (this.params.buttonPressed === pressed) return;
     this.params = { ...this.params, buttonPressed: pressed };
-    const lesson = getLessonById(this.params.topology);
+    const lesson = getLessonById(this.activeLessonId);
     this.controlsPanel.render(lesson, this.params);
     this.stepSimulation(true);
   }
@@ -1530,7 +1551,7 @@ class LearnEsp32App {
   }
 
   private openSchematicModal(): void {
-    const lesson = getLessonById(this.params.topology);
+    const lesson = getLessonById(this.activeLessonId);
     const titleEl = this.schematicModalEl.querySelector('[data-schematic="title"]');
     if (titleEl) {
       titleEl.textContent = `Fritzing-Schaltplan — ${lesson.number} · ${lesson.title}`;

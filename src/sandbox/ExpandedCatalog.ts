@@ -1269,10 +1269,160 @@ const EXTRA_ACTUATOR_SEEDS: ActuatorSeed[] = [
   },
 ];
 
+// ============================================================================
+// 40 WEITERE LEDs & AUSGABE (+ 7 Basis = 47 LEDs & Ausgabe!)
+// ============================================================================
+const EXTRA_LED_SEEDS: Array<
+  [string, string, string, string, string, string, string, number]
+> = [
+  ['led-warmwhite', 'LED Warmweiß (2700K)', 'LED Warmweiß', '💡', '#fde68a', 'WW LED', '2700K', 15],
+  ['led-coolwhite', 'LED Kaltweiß (6500K)', 'LED Kaltweiß', '⚪', '#f8fafc', 'CW LED', '6500K', 16],
+  ['led-orange', 'LED Orange (605 nm)', 'LED Orange', '🟠', '#f97316', 'ORG LED', '605nm', 12],
+  ['led-pink', 'LED Pink / Magenta', 'LED Pink', '🩷', '#ec4899', 'PINK', 'LED', 14],
+  ['led-cyan', 'LED Cyan / Türkis', 'LED Cyan', '🩵', '#06b6d4', 'CYAN', 'LED', 14],
+  ['led-purple', 'LED Violett (405 nm)', 'LED Violett', '🟣', '#a855f7', 'VIOLET', '405nm', 15],
+  ['led-ir-850', 'IR-Nachtsicht-LED (850 nm)', 'IR-LED 850nm', '🕶️', '#7c2d12', 'IR 850', 'NIGHT', 35],
+  ['led-blink-auto', 'Selbstblinkende LED (2 Hz)', 'Blink-LED', '✨', '#ef4444', 'BLINK', '2 Hz', 14],
+  ['led-bicolor-rg', 'Bi-Color LED Rot/Grün', 'Bi-Color R/G', '🚦', '#84cc16', 'BI-LED', 'ROT/GRN', 16],
+  ['led-bicolor-rb', 'Bi-Color LED Rot/Blau', 'Bi-Color R/B', '🚔', '#6366f1', 'POLIZEI', 'R/B', 16],
+  ['led-smd-5050', 'SMD 5050 RGB Breakout', 'SMD 5050', '🌈', '#d946ef', 'SMD5050', 'RGB', 32],
+  ['led-mini-3mm-r', '3mm Mini-LED Rot', '3mm LED Rot', '🔴', '#dc2626', '3mm R', 'MINI', 8],
+  ['led-mini-3mm-g', '3mm Mini-LED Grün', '3mm LED Grün', '🟢', '#16a34a', '3mm G', 'MINI', 8],
+  ['led-mini-3mm-b', '3mm Mini-LED Blau', '3mm LED Blau', '🔵', '#2563eb', '3mm B', 'MINI', 8],
+  ['led-flat-10mm', '10mm Jumbo-LED Superhell', '10mm Jumbo', '🔆', '#facc15', '10mm', 'JUMBO', 20],
+  ['led-candle-flicker', 'Kerzen-Flacker-LED (Warm)', 'Flacker-LED', '🕯️', '#fb923c', 'CANDLE', 'FLICKER', 14],
+  ['led-rainbow-slow', 'Auto-Regenbogen-LED (7-Color)', '7-Color LED', '🌈', '#ec4899', '7-COL', 'FADE', 18],
+  ['led-traffic-mod', 'Mini-Ampel-Modul (R/G/G)', 'Ampel-Modul', '🚦', '#eab308', 'AMPEL', 'R/Y/G', 22],
+  ['led-stick-8', 'WS2812B 8-LED Lichtleiste', '8-LED Stick', '🪄', '#a855f7', '8× LED', 'STICK', 85],
+  ['led-ring-12', 'WS2812B NeoPixel-Ring (12×)', '12× Ring', '💫', '#8b5cf6', '12× RGB', 'RING', 110],
+  ['led-ring-16', 'WS2812B NeoPixel-Ring (16×)', '16× Ring', '🎡', '#6366f1', '16× RGB', 'RING', 135],
+  ['led-ring-24', 'WS2812B NeoPixel-Ring (24×)', '24× Ring', '🌟', '#3b82f6', '24× RGB', 'RING', 165],
+  ['led-sk6812-rgbw', 'SK6812 RGBW Pixel (Echtweiß)', 'SK6812 RGBW', '💎', '#38bdf8', 'SK6812', 'RGBW', 45],
+  ['led-apa102-dot', 'APA102 DotStar High-Speed', 'APA102 Pixel', '⚡', '#0ea5e9', 'APA102', 'SPI RGB', 42],
+  ['led-cob-ring', 'Angel-Eye COB-Lichtring', 'COB-Ring', '⭕', '#fef08a', 'COB', 'RING', 150],
+  ['led-grow-plant', 'Pflanzen-Grow-LED (Vollspektrum)', 'Grow-LED', '🌱', '#c026d3', 'GROW', 'PLANT', 95],
+  ['led-filament-3v', 'Retro LED-Glühfaden (3V Warm)', 'LED-Filament', '💡', '#f59e0b', 'FILAM.', '3V WARM', 48],
+  ['led-uv-395', 'UV-A 395 nm Geldschein-LED', 'UV-A 395nm', '🔮', '#7e22ce', 'UV 395', 'CHECK', 20],
+  ['led-laser-green', '532 nm Grüner Laser-Emitter', 'Grün-Laser', '✳️', '#22c55e', '532 nm', 'LASER', 45],
+  ['led-laser-cross', '650 nm Kreuzlinien-Laser', 'Kreuz-Laser', '🎯', '#ef4444', 'CROSS', 'LASER', 32],
+  ['led-laser-line', '650 nm Linien-Laser-Modul', 'Linien-Laser', '📏', '#dc2626', 'LINE', 'LASER', 30],
+  ['led-tower-signal', 'Industrie-Signalturm (R/G/G)', 'Signalturm', '🚨', '#f97316', 'TOWER', 'SIGNAL', 38],
+  ['led-backlight-w', 'Flaches LED-Backlight-Panel', 'Backlight', '⬜', '#e2e8f0', 'PANEL', 'LIGHT', 40],
+  ['led-button-illum', 'Beleuchteter Arcade-Taster', 'Arcade-LED', '🕹️', '#ef4444', 'ARCADE', 'LED BTN', 18],
+  ['led-bar-blue', 'Blaue 5-LED Status-Zeile', '5-LED Blau', '🔷', '#3b82f6', '5× BAR', 'BLUE', 28],
+  ['led-bar-red', 'Rote 5-LED Warn-Zeile', '5-LED Rot', '🔺', '#ef4444', '5× BAR', 'RED', 28],
+  ['led-1w-red', '1W High-Power Star-LED Rot', '1W LED Rot', '🔥', '#dc2626', '1W HP', 'RED', 180],
+  ['led-1w-blue', '1W High-Power Star-LED Blau', '1W LED Blau', '💠', '#2563eb', '1W HP', 'BLUE', 180],
+  ['led-fiber-optic', 'Glasfaser-Lichtleiter-LED', 'Glasfaser-LED', '🎆', '#22d3ee', 'FIBER', 'OPTIC', 22],
+  ['led-wled-dot', 'WLED Einzel-Pixel-Knoten', 'WLED Pixel', '✨', '#06b6d4', 'WLED', 'PIXEL', 35],
+];
+
+const EXTRA_LEDS_CATALOG: SandboxCatalogItem[] = EXTRA_LED_SEEDS.map(
+  ([type, name, shortName, icon, accentHex, badgeTitle, badgeSub, currentMa]) => ({
+    type,
+    name,
+    shortName,
+    icon,
+    category: 'LEDs & Ausgabe',
+    colSpan: 2,
+    preferredRow: 'g',
+    pinOffsets: [
+      { dCol: 0, row: 'g', pinLabel: 'Anode (+)' },
+      { dCol: 2, row: 'g', pinLabel: 'Kathode (−)' },
+    ],
+    description: `${name} — sofort einsatzbereites 3D-Leuchtmodul für Statusanzeigen, Effekte & Lichtprojekte.`,
+    accentHex,
+    extraMeta: {
+      simKind: 'two-pin-actuator',
+      meshStyle: 'actuator-audio',
+      badgeTitle,
+      badgeSub,
+      currentMa,
+      activeText: `${shortName} leuchtet aktiv (${currentMa} mA)`,
+      idleText: '+V/Signal & GND verbinden',
+    },
+  }),
+);
+
+// ============================================================================
+// 40 WEITERE PASSIV & SCHALTER (+ 8 Basis = 48 Passiv & Schalter!)
+// ============================================================================
+const EXTRA_PASSIVE_SEEDS: Array<[string, string, string, string, string, string, string]> = [
+  ['res-100', 'Widerstand 100 Ω (Braun-Schwarz-Braun)', 'R 100 Ω', '〰️', '#d97706', '100 Ω', '0.25W'],
+  ['res-330', 'Widerstand 330 Ω (WLED Daten-Schutz)', 'R 330 Ω', '〰️', '#f97316', '330 Ω', 'WLED'],
+  ['res-470', 'Widerstand 470 Ω (Gelb-Violett-Braun)', 'R 470 Ω', '〰️', '#eab308', '470 Ω', '0.25W'],
+  ['res-1k', 'Widerstand 1 kΩ (Teiler / Basis)', 'R 1 kΩ', '〰️', '#ef4444', '1 kΩ', '0.25W'],
+  ['res-2k', 'Widerstand 2 kΩ (HC-SR04 Schutz)', 'R 2 kΩ', '〰️', '#dc2626', '2 kΩ', 'ECHO'],
+  ['res-4k7', 'Widerstand 4,7 kΩ (I²C Pull-Up)', 'R 4,7 kΩ', '〰️', '#a855f7', '4.7 kΩ', 'I2C PU'],
+  ['res-47k', 'Widerstand 47 kΩ (Hochohmig)', 'R 47 kΩ', '〰️', '#8b5cf6', '47 kΩ', '0.25W'],
+  ['res-100k', 'Widerstand 100 kΩ (Gate-Pulldown)', 'R 100 kΩ', '〰️', '#6366f1', '100 kΩ', 'PULL'],
+  ['res-1m', 'Widerstand 1 MΩ (Piezo-Entladung)', 'R 1 MΩ', '〰️', '#475569', '1 MΩ', 'HIGH-R'],
+  ['res-10w-cement', '5W Keramik-Lastwiderstand (10 Ω)', 'Last-R 10 Ω', '🧱', '#cbd5e1', '10 Ω', '5 WATT'],
+  ['trim-pot-10k', 'Trimm-Potentiometer 10 kΩ (Fein)', 'Trimmer 10k', '🎛️', '#0ea5e9', 'TRIM', '10 kΩ'],
+  ['slide-fader-10k', 'Schiebe-Potentiometer (Mischpult-Fader)', 'Schiebe-Poti', '🎚️', '#38bdf8', 'FADER', '10 kΩ'],
+  ['cap-100nf', 'Keramik-Kondensator 100 nF (Abblock)', 'Kerko 100 nF', '🔋', '#f59e0b', '100 nF', 'DECOUP'],
+  ['cap-10uf', 'Elko 10 µF (Signal-Entkopplung)', 'Elko 10 µF', '🔋', '#2563eb', '10 µF', '25V'],
+  ['cap-470uf', 'Elko 470 µF (Servo-Puffer)', 'Elko 470 µF', '🔋', '#1d4ed8', '470 µF', '16V'],
+  ['cap-1000uf', 'Elko 1000 µF (WLED Stütz-Elko)', 'Elko 1000 µF', '🔋', '#1e40af', '1000µF', 'WLED'],
+  ['supercap-1f', 'Superkondensator 1 Farad (5,5 V)', 'SuperCap 1F', '⚡', '#06b6d4', '1.0 F', 'SUPER'],
+  ['inductor-100uh', 'Induktivität / Spule 100 µH', 'Spule 100 µH', '🌀', '#b45309', '100 µH', 'COIL'],
+  ['ferrite-bead', 'Ferrit-Entstörperle (EMV-Filter)', 'Ferrit-Filter', '🧲', '#334155', 'FERRIT', 'EMI'],
+  ['diode-1n5819', 'Schottky-Diode 1N5819 (Low-Drop)', 'Schottky 5819', '▶️', '#64748b', '1N5819', '0.3V'],
+  ['diode-zener-3v3', 'Zener-Diode 3,3 V (Überspannungsschutz)', 'Zener 3,3V', '🛡️', '#ef4444', 'Z 3.3V', 'CLAMP'],
+  ['diode-zener-5v1', 'Zener-Diode 5,1 V (Schutzdiode)', 'Zener 5,1V', '🛡️', '#dc2626', 'Z 5.1V', 'CLAMP'],
+  ['bridge-rectifier', 'Brückengleichrichter (AC → DC)', 'Gleichrichter', '🔀', '#475569', 'AC→DC', 'BRIDGE'],
+  ['trans-bc547', 'NPN-Transistor BC547 (Allround)', 'BC547 NPN', '🔺', '#1e293b', 'BC547', 'NPN'],
+  ['trans-bc557', 'PNP-Transistor BC557 (High-Side)', 'BC557 PNP', '🔻', '#334155', 'BC557', 'PNP'],
+  ['trans-tip120', 'TIP120 Darlington Leistungstransistor', 'TIP120 Power', '⚡', '#0f172a', 'TIP120', '5 AMP'],
+  ['mosfet-p-ch', 'P-Kanal MOSFET (High-Side Schalter)', 'P-MOSFET', '🔌', '#475569', 'P-CH', 'MOSFET'],
+  ['optocoupler-817', 'Optokoppler PC817 (Galv. Trennung)', 'Optokoppler', '🔗', '#1e293b', 'PC817', 'ISOL.'],
+  ['ic-74hc595', '74HC595 8-Bit Schieberegister', '74HC595 IC', '🧩', '#0f172a', '74HC595', '8-OUT'],
+  ['ic-74ahct125', '74AHCT125 Pegelwandler (3,3→5V)', '74AHCT125', '📶', '#22c55e', '3V→5V', 'SHIFT'],
+  ['i2c-shifter', '4-Kanal Bi-Dir I²C Level-Shifter', 'I²C Shifter', '🔄', '#0284c7', 'BI-DIR', '3V↔5V'],
+  ['reg-ams1117', 'AMS1117 3,3V Spannungsregler', 'Regler 3,3V', '🔋', '#0ea5e9', '3.3V', 'REG'],
+  ['reg-lm7805', 'LM7805 5V Linear-Spannungsregler', 'LM7805 5V', '🔋', '#1e293b', '7805', '5V 1A'],
+  ['buck-lm2596', 'LM2596 Step-Down Buck-Wandler', 'Buck-Wandler', '⚡', '#2563eb', 'BUCK', 'DC-DC'],
+  ['polyfuse-500', 'Selbstrückstellende Polyfuse 500 mA', 'Sicherung', '🧯', '#f59e0b', 'FUSE', '500mA'],
+  ['toggle-switch', 'Metall-Kippschalter (Mini ON/OFF)', 'Kippschalter', '🕹️', '#94a3b8', 'TOGGLE', 'ON/OFF'],
+  ['dip-switch-4', '4-Fach DIP-Konfigurationsschalter', '4× DIP-Switch', '🎚️', '#dc2626', '4× DIP', 'SWITCH'],
+  ['estop-button', 'Roter Not-Aus-Pilztaster', 'Not-Aus-Pilz', '🛑', '#ef4444', 'E-STOP', 'NOT-AUS'],
+  ['limit-microswitch', 'Endschalter (Microswitch mit Hebel)', 'Endschalter', '🔘', '#64748b', 'LIMIT', 'SWITCH'],
+  ['tilt-sw520d', 'SW-520D Neigungs- & Kugelschalter', 'Neigungssw.', '📐', '#f59e0b', 'TILT', 'SW520D'],
+];
+
+const EXTRA_PASSIVE_CATALOG: SandboxCatalogItem[] = EXTRA_PASSIVE_SEEDS.map(
+  ([type, name, shortName, icon, accentHex, badgeTitle, badgeSub]) => ({
+    type,
+    name,
+    shortName,
+    icon,
+    category: 'Passiv & Schalter',
+    colSpan: 2,
+    preferredRow: 'h',
+    pinOffsets: [
+      { dCol: 0, row: 'h', pinLabel: 'Pin A' },
+      { dCol: 2, row: 'h', pinLabel: 'Pin B' },
+    ],
+    description: `${name} — wichtiges Basis-, Schutz- oder Schaltbauteil für eigene Breadboard-Schaltungen.`,
+    accentHex,
+    extraMeta: {
+      simKind: 'digital-sensor',
+      meshStyle: 'sensor-pcb',
+      badgeTitle,
+      badgeSub,
+      currentMa: 0.5,
+      activeText: `${shortName} aktiv im Schaltkreis`,
+      idleText: `${shortName} eingesetzt`,
+    },
+  }),
+);
+
 export const EXTRA_SENSORS_CATALOG: SandboxCatalogItem[] = EXTRA_SENSOR_SEEDS.map(buildSensorItem);
 export const EXTRA_ACTUATORS_CATALOG: SandboxCatalogItem[] =
   EXTRA_ACTUATOR_SEEDS.map(buildActuatorItem);
 export const EXPANDED_CATALOG_ITEMS: SandboxCatalogItem[] = [
+  ...EXTRA_LEDS_CATALOG,
+  ...EXTRA_PASSIVE_CATALOG,
   ...EXTRA_SENSORS_CATALOG,
   ...EXTRA_ACTUATORS_CATALOG,
 ];

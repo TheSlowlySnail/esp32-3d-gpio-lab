@@ -572,6 +572,136 @@ export function getCatalogItem(type: SandboxPartType): SandboxCatalogItem {
   return SANDBOX_CATALOG.find((i) => i.type === type) ?? SANDBOX_CATALOG[0];
 }
 
+const PART_ICON_MAP: Record<string, string> = {
+  'led-red': '🔴',
+  'led-green': '🟢',
+  'led-blue': '🔵',
+  'led-yellow': '🟡',
+  'led-rgb': '🌈',
+  'neopixel-ring': '💫',
+  'laser-diode': '🎯',
+  'resistor-220': '〰️',
+  'resistor-10k': '〰️',
+  potentiometer: '🎛️',
+  button: '🔘',
+  'slide-switch': '🎚️',
+  capacitor: '🔋',
+  'diode-1n4007': '▶️',
+  'mosfet-irlz44n': '⚡',
+  ldr: '☀️',
+  bme280: '🌡️',
+  dht22: '💧',
+  hcsr04: '🦇',
+  ld2490: '📡',
+  'pir-hc501': '🚶',
+  'mq2-gas': '💨',
+  'soil-moisture': '🌱',
+  mpu6050: '🧭',
+  'rfid-rc522': '💳',
+  'touch-ttp223': '👆',
+  'sound-mic': '🎤',
+  'hall-sensor': '🧲',
+  'rain-sensor': '🌧️',
+  oled: '🖥️',
+  'seven-seg': '🔢',
+  servo: '🦾',
+  buzzer: '🔊',
+  'relay-module': '🔌',
+  'cooling-fan': '🌀',
+  'vib-motor': '📳',
+  // Extended sensors
+  'ds18b20-probe': '🌡️',
+  'sht31-climate': '🌤️',
+  'bmp390-baro': '🎈',
+  'scd41-co2': '🌿',
+  'sgp40-voc': '🌬️',
+  'pms5003-pm25': '🌫️',
+  'mq135-air': '💨',
+  'mq7-co': '⚠️',
+  'mlx90614-ir': '🔥',
+  'amg8833-thermal': '🟥',
+  'max31855-thermo': '🔥',
+  'ntc-thermistor': '🌡️',
+  'vl53l0x-tof': '📏',
+  'bh1750-lux': '☀️',
+  'veml6075-uv': '🕶️',
+  'tcs34725-color': '🎨',
+  'apds9960-gesture': '✋',
+  'ir-recv-1838': '📺',
+  'tcrt5000-line': '🛤️',
+  'flame-ir-sensor': '🔥',
+  'ov2640-cam': '📷',
+  'as5600-angle': '🧭',
+  'bno055-imu': '🧭',
+  'hx711-loadcell': '⚖️',
+  'fsr402-pressure': '👇',
+  'flex-bend': '〰️',
+  'piezo-knock': '🥁',
+  'sw420-vibration': '📳',
+  'reed-door': '🚪',
+  'rotary-ec11': '🎛️',
+  'joystick-2axis': '🕹️',
+  'keypad-4x4': '⌨️',
+  'max30102-pulse': '❤️',
+  'r503-fingerprint': '👆',
+  'neo6m-gps': '🛰️',
+  'ina219-current': '⚡',
+  'sct013-clamp': '🔌',
+  'water-level-float': '🌊',
+  'tds-water-quality': '💧',
+  'ph-water-probe': '🧪',
+  // Extended actuators
+  'dc-motor-130': '⚙️',
+  'nema17-stepper': '⚙️',
+  'stepper-28byj48': '⚙️',
+  'servo-mg996r': '🦾',
+  'servo-360-cont': '🔄',
+  'linear-actuator': '↕️',
+  'water-pump-5v': '💧',
+  'peristaltic-pump': '🧪',
+  'air-pump-5v': '🫧',
+  'solenoid-valve': '🚰',
+  'solenoid-lock': '🔒',
+  'electromagnet-5v': '🧲',
+  'l298n-hbridge': '🔀',
+  'a4988-stepper-drv': '🧩',
+  'lcd1602-i2c': '📟',
+  'lcd2004-i2c': '📟',
+  'max7219-matrix': '🟥',
+  'tm1637-4digit': '⏰',
+  'tft-st7789': '🖼️',
+  'epaper-29': '📄',
+  'led-bargraph-10': '📊',
+  'nixie-tube': '🟠',
+  'ws2812-matrix-16': '🌈',
+  'analog-vu-meter': '⏲️',
+  'relay-4ch': '🔌',
+  'ssr-solidstate': '⚡',
+  'ac-dimmer-triac': '🔆',
+  'dfplayer-mp3': '🎵',
+  'speaker-3w': '🔊',
+  'pam8403-amp': '🎚️',
+  'active-siren': '🚨',
+  'ir-blaster-led': '📡',
+  'cob-led-white': '☀️',
+  'uv-led-365': '🔮',
+  'strobe-flash': '⚡',
+  'peltier-tec1': '❄️',
+  'heating-pad-5v': '🔥',
+  'mist-maker-piezo': '🌫️',
+  'rf433-tx': '📻',
+  'lora-sx1278': '🛰️',
+};
+
+export function getPartIcon(item: SandboxCatalogItem): string {
+  if (item.icon) return item.icon;
+  if (PART_ICON_MAP[item.type]) return PART_ICON_MAP[item.type];
+  if (item.category === 'LEDs & Ausgabe') return '💡';
+  if (item.category === 'Passiv & Schalter') return '〰️';
+  if (item.category === 'Sensoren') return '📡';
+  return '⚙️';
+}
+
 export function formatEndpointLabel(ep: WireEndpoint, boardId: EspBoardId): string {
   if (ep.kind === 'board') {
     const b = getEspBoardById(boardId);
@@ -641,13 +771,21 @@ class UnionFind {
   }
 }
 
+export function normalizePartRow(row: string): string {
+  if (['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].includes(row)) return row;
+  if (row === '+top' || row === '-top') return 'j';
+  if (row === '+bot' || row === '-bot') return 'a';
+  return 'g';
+}
+
 export function getPartPinNets(part: PlacedPart): string[] {
   const def = getCatalogItem(part.type);
+  const effectiveRow = normalizePartRow(part.row);
   return def.pinOffsets.map((po) =>
     getElectricalNetId({
       kind: 'breadboard',
       col: Math.max(1, Math.min(30, part.col + po.dCol)),
-      row: po.row,
+      row: effectiveRow,
     }),
   );
 }

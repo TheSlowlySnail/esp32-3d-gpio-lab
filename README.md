@@ -9,16 +9,17 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 ## Highlights & Features
 
 - **5 interaktive Arbeitsbereiche (Navigationsleiste):**
-  - **📚 Lektionen (19):** 19 fertige Schaltungen von LED & Taster bis WLED & Raspberry Pi.
-  - **🔧 Freie Werkbank (116 Bauteile & Kabel):** Eigene Schaltungen direkt auf dem 3D-Steckbrett aufbauen, **verschieben (`✋` in 3D + `◀`/`▶`)**, **löschen (`🗑` in 3D + `×`)** und mit **6-farbigen 3D-Jumperkabeln** verkabeln — inkl. Suche, Kategorie- & `★ Fav`-Filter sowie **116 Bauteilen** (**54 Sensoren**, **47 Aktoren & Displays**, **7 LEDs & Laser**, **8 Passiv & Schalter** — von DS18B20, SCD41 CO₂, AMG8833 Wärmebild, VL53L0X Laser-ToF, MAX30102 Puls/SpO₂, R503 Fingerprint & NEO-6M GPS bis NEMA 17, Peristaltik-Pumpe, LCD1602/2004, IPS Farb-TFT, E-Paper, Retro-Nixie-Röhre, DFPlayer MP3, Peltier-Kühler, Nebel-Modul & LoRa 868 MHz).
-  - **🧭 Bau mit mir! (10 Geführte Bauprojekte):** Nimmt Einsteiger Schritt für Schritt an die Hand — von der ersten LED über Ampel, PIR-Alarm, Pflanzen-Gießwächter, DHT22+OLED Wetterstation, Laser-Lichtschranke und Ultraschall-Parkschranke bis zu 5V-Lüfter + NeoPixel-Ring, mit pulsierenden 3D-Zielmarkierungen und Ein-Klick-Helfer (`✨ Diesen Schritt für mich stecken`).
-  - **😂 Funny Ideen (12 Spaß-Projekte für ESP32 & Raspberry Pi):** 12 kreative, lustige und wirklich baubare Maker-Ideen — filterbar nach ESP32/Pi und jede mit **„⚡ Prototyp in 3D-Werkbank laden“**!
+  - **📚 Lektionen (59):** 59 interaktive Schaltungen & Experimente in 8 Kategorien — inkl. **Arduino Praxis**, **Smart Home & IoT**, **Raspberry Pi**, **WLED & LED-Streifen**, Grundlagen, PWM, Sensoren & Aktoren.
+  - **🔧 Freie Werkbank (196 Bauteile & Kabel):** Eigene Schaltungen punktgenau auf oberer (`f`–`j`) **und** unterer (`a`–`e`) Steckbretthälfte aufbauen, **verschieben (`✋` in 3D + `◀`/`▶`)**, **löschen (`🗑` in 3D + `×`)** und mit **6-farbigen 3D-Jumperkabeln** verkabeln — alle **196 Bauteile** mit Symbolen/Icons, Suche, Kategorie- & `★ Fav`-Filter (**54 Sensoren**, **47 Aktoren & Displays**, **47 LEDs & Ausgabe**, **48 Passiv & Schalter**).
+  - **🧭 Bau mit mir! (50 Geführte Bauprojekte):** 50 komplette Schritt-für-Schritt-Projekte von der ersten LED über Ampel, CO₂-Ampel, Bewässerung, Geheim-Tresor, Gesten-Dimmer & Nixie-Uhr bis zu 5V-Lüfter + NeoPixel-Ring — mit pulsierenden 3D-Zielmarkierungen und Ein-Klick-Helfer (`✨ Diesen Schritt für mich stecken`).
+  - **😂 Funny Ideen (52 Spaß-Projekte für ESP32, Raspberry Pi & Arduino):** 52 kreative, lustige und wirklich baubare Maker-Ideen — filterbar nach **Alle / ESP32 / Raspberry Pi / Arduino**, jede mit **„⚡ Prototyp in 3D-Werkbank laden“**!
   - **⭐ Favoriten (Persistent im Browser gespeichert):** Überall per **`★`** Lieblings-Sensoren, Aktoren, Lektionen, Bauprojekte und Funny-Ideen merken und in der eigenen Favoriten-Rubrik mit einem Klick wieder öffnen.
 - **Interaktive 3D-Szene (Three.js + OrbitControls):**
   - Maßstabsgetreue 3D-Bauteile mit weichen Schatten, Live-LED-Glow (`emissiveIntensity`, additiver Halo, `PointLight`), automatisch aktualisierten 4-Band-Widerstandsfarbringen (IEC 60062), klickbarem 3D-Taster, drehendem SG90-Servo-Arm, 24-GHz-HLK-LD2490-Radarwellen, Mean Well 5V-Netzteil/Akku-Pack, flexiblen WS2812B-WLED-Streifen, rotierendem 5-V-Axiallüfter und selbstleuchtendem 0,96"-SSD1306-OLED-Display.
-  - **10 wählbare Mikrocomputer & Mikrocontroller (inkl. eigener Vergleichs-Rubrik „Boards (10)“):**
-    - *ESP32 Standard & Mini:* `ESP32 DevKit V1`, `ESP32-S3 DevKitC-1 (Dual USB-C)`, `ESP32-C6 DevKitC-1 (Wi-Fi 6 / Zigbee)`, `ESP32-C3 SuperMini`, `ESP32-S3-Zero`, `ESP32 D1 Mini`
-    - *Raspberry Pi (Linux SBC & MCU):* `Raspberry Pi 5 (8 GB)`, `Raspberry Pi 4 Model B`, `Raspberry Pi Zero 2 W`, `Raspberry Pi Pico 2 W (RP2350)`
+  - **15 wählbare Mikrocomputer & Mikrocontroller (inkl. eigener Vergleichs-Rubrik „Boards (15)“):**
+    - *ESP32 Standard & Mini (6):* `ESP32 DevKit V1`, `ESP32-S3 DevKitC-1`, `ESP32-C6 DevKitC-1`, `ESP32-C3 SuperMini`, `ESP32-S3-Zero`, `ESP32 D1 Mini`
+    - *Arduino Boards (5):* `Arduino UNO R4 WiFi`, `Arduino Nano V3`, `Arduino Mega 2560 Rev3`, `Arduino Pro Micro (ATmega32U4)`, `Arduino Nano ESP32 (S3)`
+    - *Raspberry Pi (4):* `Raspberry Pi 5 (8 GB)`, `Raspberry Pi 4 Model B`, `Raspberry Pi Zero 2 W`, `Raspberry Pi Pico 2 W (RP2350)`
   - **Raum abdunkeln (`Raum dunkel`):** Dimmt das 3D-Umgebungslicht auf Dunkelraum-Niveau herunter, sodass LEDs, WLED-Streifen, Ampel und das SSD1306-OLED besonders kontrastreich strahlen.
   - **Mit Steckbrett oder „Ohne Breadboard“:** Per Klick lässt sich das Steckbrett ausblenden und die komplette Schaltung als fertiger Direktaufbau mit **WAGO 221-415 Hebelklemmen** anzeigen.
 - **Reine Schaltungs-Simulations-Engine (`src/engine/`, 0 % Three.js):**

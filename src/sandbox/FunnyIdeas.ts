@@ -1,7 +1,8 @@
 import type { EspBoardId } from '../engine/types';
+import { EXPANDED_FUNNY_IDEAS } from './ExpandedFunnyIdeas';
 import type { PlacedPart, PlacedWire, SandboxState } from './SandboxTypes';
 
-export type FunnyPlatform = 'esp32' | 'raspberry-pi' | 'both';
+export type FunnyPlatform = 'esp32' | 'raspberry-pi' | 'arduino' | 'both';
 
 export interface FunnyIdea {
   id: string;
@@ -446,4 +447,5 @@ export const FUNNY_IDEAS: FunnyIdea[] = [
         ],
       ),
   },
+  ...EXPANDED_FUNNY_IDEAS,
 ];

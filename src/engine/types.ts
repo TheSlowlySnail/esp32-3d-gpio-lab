@@ -22,9 +22,14 @@ export type EspBoardId =
   | 'rpi-5'
   | 'rpi-4b'
   | 'rpi-zero-2w'
-  | 'rpi-pico-2w';
+  | 'rpi-pico-2w'
+  | 'arduino-uno-r4'
+  | 'arduino-nano'
+  | 'arduino-mega-2560'
+  | 'arduino-micro'
+  | 'arduino-nano-esp32';
 
-export type BoardFamily = 'esp32' | 'raspberry-pi-sbc' | 'raspberry-pi-mcu';
+export type BoardFamily = 'esp32' | 'raspberry-pi-sbc' | 'raspberry-pi-mcu' | 'arduino';
 
 export type CircuitTopologyId =
   | 'led-resistor'
@@ -107,7 +112,16 @@ export interface EspBoardSpec {
   overview: string;
   highlights: string[];
   esphomeBoard: string;
-  esphomeVariant: 'ESP32' | 'ESP32C3' | 'ESP32S3' | 'ESP32C6' | 'RP2350' | 'LINUX_SBC';
+  esphomeVariant:
+    | 'ESP32'
+    | 'ESP32C3'
+    | 'ESP32S3'
+    | 'ESP32C6'
+    | 'RP2350'
+    | 'LINUX_SBC'
+    | 'ARDUINO_RA4M1'
+    | 'ARDUINO_AVR'
+    | 'ARDUINO_HID';
   pcbColorHex: string;
   accentHex: string;
   width: number;

@@ -1,3 +1,4 @@
+import { EXPANDED_GUIDED_PROJECTS } from './ExpandedGuidedProjects';
 import { getElectricalNetId } from './SandboxEngine';
 import type {
   HighlightMarker,
@@ -1046,6 +1047,7 @@ export const GUIDED_PROJECTS: GuidedProject[] = [
       ),
     ],
   },
+  ...EXPANDED_GUIDED_PROJECTS,
 ];
 
 export function getGuidedProjectById(id: string): GuidedProject {

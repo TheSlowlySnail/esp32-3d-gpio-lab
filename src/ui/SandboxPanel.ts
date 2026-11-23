@@ -4,6 +4,7 @@ import { GUIDED_PROJECTS, type GuidedProject } from '../sandbox/GuidedProjects';
 import {
   formatEndpointLabel,
   getCatalogItem,
+  getPartIcon,
   SANDBOX_CATALOG,
   WIRE_COLORS,
 } from '../sandbox/SandboxEngine';
@@ -67,7 +68,7 @@ export class SandboxPanel {
     const stepCompletionKey = view.guidedProject.steps
       .map((s) => (s.isCompleted(view.state) ? '1' : '0'))
       .join('');
-    const partsPosKey = view.state.parts.map((p) => `${p.id}@${p.col}`).join(',');
+    const partsPosKey = view.state.parts.map((p) => `${p.id}@${p.col}${p.row}`).join(',');
     const key = [
       view.mode,
       view.boardId,
@@ -210,7 +211,7 @@ export class SandboxPanel {
                         title="${item.description}"
                         class="flex-1 min-w-0 px-2 py-1.5 text-left text-[11px] cursor-pointer flex items-center gap-1.5"
                       >
-                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${item.accentHex}"></span>
+                        <span class="text-xs leading-none shrink-0" aria-hidden="true">${getPartIcon(item)}</span>
                         <span class="truncate">${item.shortName}</span>
                       </button>
                       <button
@@ -258,7 +259,11 @@ export class SandboxPanel {
               return `
                 <div class="eng-card-soft rounded-lg border px-2 py-1.5 flex items-center justify-between gap-1.5 ${isSelectedMove ? 'border-amber-400 bg-amber-500/12' : ''}">
                   <div class="min-w-0 flex-1">
-                    <div class="text-[11px] font-semibold eng-text-main truncate">${def.shortName} <span class="font-mono text-[10px] eng-text-muted">@ Sp.${p.col}</span></div>
+                    <div class="text-[11px] font-semibold eng-text-main truncate flex items-center gap-1">
+                      <span class="text-xs leading-none shrink-0">${getPartIcon(def)}</span>
+                      <span class="truncate">${def.shortName}</span>
+                      <span class="font-mono text-[10px] eng-text-muted shrink-0">@ ${p.col}${p.row}</span>
+                    </div>
                     <div class="text-[10px] ${statusColor} truncate">${st?.statusText ?? ''}</div>
                   </div>
                   <div class="flex items-center gap-0.5 shrink-0">

@@ -17,11 +17,16 @@ export class Esp32Mesh {
 
   constructor(spec: EspBoardSpec) {
     this.spec = spec;
-    this.group.name = `ESP_Board_${spec.id}`;
+    this.group.name = `Board_${spec.id}`;
     this.buildPcb();
-    this.buildModuleOrChip();
-    this.buildUsbAndButtons();
-    this.buildPinHeaders();
+    if (spec.family === 'raspberry-pi-sbc') {
+      this.buildRaspberryPiSbcHardware();
+      this.buildRaspberryPi40PinHeader();
+    } else {
+      this.buildModuleOrChip();
+      this.buildUsbAndButtons();
+      this.buildPinHeaders();
+    }
     this.buildOnboardLeds();
   }
 
@@ -62,8 +67,8 @@ export class Esp32Mesh {
       ctx.lineWidth = 5;
       ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
 
-      // Gold PCB meander antenna for non-ceramic boards
-      if (!hasCeramicAntenna) {
+      // Gold PCB meander antenna for non-ceramic boards (skip on Raspberry Pi SBCs)
+      if (!hasCeramicAntenna && this.spec.family !== 'raspberry-pi-sbc') {
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 10;
         const topY = 44;
@@ -92,34 +97,45 @@ export class Esp32Mesh {
       ctx.fillStyle = accentHex;
       ctx.font = '600 17px JetBrains Mono, monospace';
       ctx.fillText(
-        isMini ? 'MINI • 3.3V LOGIC' : `${this.spec.esphomeVariant} • 3.3V`,
+        this.spec.family === 'raspberry-pi-sbc'
+          ? 'LINUX SBC • 40-PIN GPIO'
+          : isMini
+            ? 'MINI • 3.3V LOGIC'
+            : `${this.spec.esphomeVariant} • 3.3V`,
         canvas.width / 2,
         canvas.height - 125,
       );
 
-      // Pin labels along both edges
-      const pinFont = isMini ? 'bold 24px JetBrains Mono, monospace' : 'bold 20px JetBrains Mono, monospace';
-      ctx.font = pinFont;
-      const n = this.spec.pinCountPerSide;
-      const padTop = canvas.height * 0.13;
-      const padBot = canvas.height * 0.13;
-      const span = canvas.height - padTop - padBot;
+      // Pin labels along edges (for SBCs both rows sit on right 40-pin header; skip left edge silkscreen)
+      if (this.spec.family !== 'raspberry-pi-sbc') {
+        const pinFont = isMini ? 'bold 24px JetBrains Mono, monospace' : 'bold 20px JetBrains Mono, monospace';
+        ctx.font = pinFont;
+        const n = this.spec.pinCountPerSide;
+        const padTop = canvas.height * 0.13;
+        const padBot = canvas.height * 0.13;
+        const span = canvas.height - padTop - padBot;
 
-      leftPinLabels.forEach((pin, idx) => {
-        const y = padTop + (n > 1 ? (idx / (n - 1)) * span : span / 2);
-        const clean = pin.replace(/[23B]$/, '');
-        ctx.fillStyle = clean === '3V3' || clean === '5V' ? '#f87171' : clean === 'GND' ? '#94a3b8' : '#cbd5e1';
-        ctx.textAlign = 'left';
-        ctx.fillText(clean, 62, y + 7);
-      });
+        leftPinLabels.forEach((pin, idx) => {
+          const y = padTop + (n > 1 ? (idx / (n - 1)) * span : span / 2);
+          const clean = pin.replace(/[23B]$/, '');
+          ctx.fillStyle = clean === '3V3' || clean === '5V' ? '#f87171' : clean === 'GND' ? '#94a3b8' : '#cbd5e1';
+          ctx.textAlign = 'left';
+          ctx.fillText(clean, 62, y + 7);
+        });
 
-      rightPinLabels.forEach((pin, idx) => {
-        const y = padTop + (n > 1 ? (idx / (n - 1)) * span : span / 2);
-        const clean = pin.replace(/[23B]$/, '');
-        ctx.fillStyle = clean === '3V3' || clean === '5V' ? '#f87171' : clean === 'GND' ? '#94a3b8' : '#cbd5e1';
+        rightPinLabels.forEach((pin, idx) => {
+          const y = padTop + (n > 1 ? (idx / (n - 1)) * span : span / 2);
+          const clean = pin.replace(/[23B]$/, '');
+          ctx.fillStyle = clean === '3V3' || clean === '5V' ? '#f87171' : clean === 'GND' ? '#94a3b8' : '#cbd5e1';
+          ctx.textAlign = 'right';
+          ctx.fillText(clean, canvas.width - 62, y + 7);
+        });
+      } else {
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 22px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(clean, canvas.width - 62, y + 7);
-      });
+        ctx.fillText('40-PIN GPIO', canvas.width - 42, 68);
+      }
     }
 
     const pcbTex = new THREE.CanvasTexture(canvas);
@@ -310,6 +326,165 @@ export class Esp32Mesh {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.08, 12), btnCapMat);
       cap.position.set(sx, topY + 0.14, btnZ);
       this.group.add(cap);
+    }
+  }
+
+    // Register 40-pin GPIO double row along the right edge of Raspberry Pi SBCs
+  private buildRaspberryPiSbcHardware(): void {
+    const { width, depth, isMini, id, chipLabel } = this.spec;
+    const topY = this.pcbElevation + this.pcbHeight / 2;
+
+    const metalMat = new THREE.MeshStandardMaterial({
+      color: 0xcbd5e1,
+      metalness: 0.85,
+      roughness: 0.24,
+    });
+    const darkIcMat = new THREE.MeshStandardMaterial({
+      color: 0x161b26,
+      roughness: 0.42,
+      metalness: 0.15,
+    });
+
+    // Main Broadcom SoC Heatspreader / SiP
+    const socSize = isMini ? 0.92 : 1.18;
+    const socMesh = new THREE.Mesh(new THREE.BoxGeometry(socSize, 0.16, socSize), metalMat);
+    socMesh.position.set(isMini ? -0.22 : -0.35, topY + 0.08, -0.55);
+    socMesh.castShadow = true;
+    this.group.add(socMesh);
+
+    // Wi-Fi RF shield (silver metallic can)
+    const wifiCan = new THREE.Mesh(
+      new THREE.BoxGeometry(isMini ? 0.65 : 0.86, 0.16, isMini ? 0.72 : 0.95),
+      metalMat,
+    );
+    wifiCan.position.set(isMini ? -0.25 : -1.25, topY + 0.08, -1.75);
+    this.group.add(wifiCan);
+
+    // LPDDR4 RAM IC
+    if (!isMini) {
+      const ram = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.12, 0.68), darkIcMat);
+      ram.position.set(-0.35, topY + 0.06, 0.62);
+      this.group.add(ram);
+
+      // Pi 5 RP1 Southbridge chip
+      if (id === 'rpi-5') {
+        const rp1 = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.12, 0.68), darkIcMat);
+        rp1.position.set(0.55, topY + 0.06, 0.75);
+        this.group.add(rp1);
+      }
+
+      // Iconic south-edge I/O stack: Gigabit Ethernet + USB 3.0 (blue) + USB 2.0 (black)
+      const portH = 0.88;
+      const portD = 1.15;
+      const zPorts = depth / 2 - portD / 2 + 0.18;
+
+      const eth = new THREE.Mesh(new THREE.BoxGeometry(0.96, portH, portD), metalMat);
+      eth.position.set(-1.32, topY + portH / 2, zPorts);
+      eth.castShadow = true;
+      this.group.add(eth);
+
+      const usb3 = new THREE.Mesh(new THREE.BoxGeometry(0.86, portH, portD), metalMat);
+      usb3.position.set(-0.18, topY + portH / 2, zPorts);
+      usb3.castShadow = true;
+      this.group.add(usb3);
+      // Blue USB 3.0 tongue
+      const usb3Tongue = new THREE.Mesh(
+        new THREE.BoxGeometry(0.56, 0.16, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.4 }),
+      );
+      usb3Tongue.position.set(-0.18, topY + portH * 0.52, zPorts + portD / 2 + 0.01);
+      this.group.add(usb3Tongue);
+
+      const usb2 = new THREE.Mesh(new THREE.BoxGeometry(0.86, portH, portD), metalMat);
+      usb2.position.set(0.88, topY + portH / 2, zPorts);
+      usb2.castShadow = true;
+      this.group.add(usb2);
+
+      // Left-edge USB-C power & Dual Micro-HDMI connectors
+      for (const lz of [-1.85, -0.85, 0.05]) {
+        const micro = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.52), metalMat);
+        micro.position.set(-width / 2 + 0.12, topY + 0.12, lz);
+        this.group.add(micro);
+      }
+    } else {
+      // Pi Zero 2 W: Mini-HDMI + 2x Micro-USB along left edge
+      for (const lz of [-1.4, 0.35, 1.35]) {
+        const port = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.22, 0.48), metalMat);
+        port.position.set(-width / 2 + 0.1, topY + 0.11, lz);
+        this.group.add(port);
+      }
+    }
+
+    // 4 Brass corner mounting rings
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.85, roughness: 0.25 });
+    for (const sx of [-width / 2 + 0.24, width / 2 - 0.24]) {
+      for (const sz of [-depth / 2 + 0.24, depth / 2 - 0.24]) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 10, 18), ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(sx, topY + 0.015, sz);
+        this.group.add(ring);
+      }
+    }
+
+    // Subtle rubber feet underneath SBC
+    const footMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+    for (const sx of [-width / 2 + 0.35, width / 2 - 0.35]) {
+      for (const sz of [-depth / 2 + 0.35, depth / 2 - 0.35]) {
+        const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.48, 12), footMat);
+        foot.position.set(sx, 0.24, sz);
+        this.group.add(foot);
+      }
+    }
+    void chipLabel;
+  }
+
+  private buildRaspberryPi40PinHeader(): void {
+    const { width, depth, leftPinLabels, rightPinLabels } = this.spec;
+    const topY = this.pcbElevation + this.pcbHeight / 2;
+    const headerHousingMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
+    const goldPinMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.88, roughness: 0.22 });
+
+    const pinCount = 20;
+    const zSpan = Math.min(4.2, depth * 0.72);
+    const zStart = -zSpan / 2 - (this.spec.isMini ? 0 : 0.35);
+    const zStep = zSpan / (pinCount - 1);
+    const headerX = width / 2 - 0.32;
+
+    // 2x20 Black shrouded base
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.22, zSpan + 0.22), headerHousingMat);
+    base.position.set(headerX, topY + 0.11, zStart + zSpan / 2);
+    base.castShadow = true;
+    this.group.add(base);
+
+    const pinGeo = new THREE.BoxGeometry(0.055, 0.48, 0.055);
+    for (let i = 0; i < pinCount; i++) {
+      const z = zStart + i * zStep;
+      const xInner = headerX - 0.1;
+      const xOuter = headerX + 0.1;
+
+      const pInner = new THREE.Mesh(pinGeo, goldPinMat);
+      pInner.position.set(xInner, topY + 0.24, z);
+      this.group.add(pInner);
+
+      const pOuter = new THREE.Mesh(pinGeo, goldPinMat);
+      pOuter.position.set(xOuter, topY + 0.24, z);
+      this.group.add(pOuter);
+
+      const innerLabel = leftPinLabels[i];
+      const outerLabel = rightPinLabels[i];
+
+      if (innerLabel) {
+        const v = new THREE.Vector3(xInner, topY + 0.42, z);
+        this.pinLocalPositions.set(innerLabel, v);
+        const clean = innerLabel.replace(/[2345678B]$/, '');
+        if (!this.pinLocalPositions.has(clean)) this.pinLocalPositions.set(clean, v.clone());
+      }
+      if (outerLabel) {
+        const v = new THREE.Vector3(xOuter, topY + 0.42, z);
+        this.pinLocalPositions.set(outerLabel, v);
+        const clean = outerLabel.replace(/[2345678B]$/, '');
+        if (!this.pinLocalPositions.has(clean)) this.pinLocalPositions.set(clean, v.clone());
+      }
     }
   }
 

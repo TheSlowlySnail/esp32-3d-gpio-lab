@@ -120,6 +120,7 @@ function svgEspBoard(
   boardName: string,
   chipLabel: string,
   isMini: boolean,
+  pcbColor: string,
   accent: string,
   pins: Array<{ y: number; label: string; color: string }>,
 ): string {
@@ -129,7 +130,7 @@ function svgEspBoard(
   const h = 276;
   return `
     <g>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="#111827" stroke="${accent}" stroke-width="2.2" />
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${pcbColor}" stroke="${accent}" stroke-width="2.2" />
       <!-- RF Shield / Chip (shifted slightly left so right pin labels never overlap) -->
       <rect x="${x + 14}" y="${y + 22}" width="78" height="${isMini ? 52 : 68}" rx="5" fill="${isMini ? '#1e293b' : '#cbd5e1'}" stroke="#64748b" stroke-width="1.5" />
       ${
@@ -591,6 +592,88 @@ export function renderFritzingSvg(
       `;
       break;
     }
+
+    case 'pi-traffic-light': {
+      espPins = [
+        { y: 112, label: `R G${p.outA.gpio}`, color: '#f87171' },
+        { y: 175, label: `Y G${p.outB.gpio}`, color: '#fde047' },
+        { y: 238, label: `G G${p.outC.gpio}`, color: '#4ade80' },
+        { y: 292, label: 'GND', color: '#94a3b8' },
+      ];
+      bodySvg = `
+        ${wire([[190, 112], [324, 112]], '#ef4444')}
+        ${wire([[190, 175], [324, 175]], '#eab308')}
+        ${wire([[190, 238], [324, 238]], '#22c55e')}
+        ${svgResistor(340, 112, 220, 'R_Rot', isRem('r-red'), textCol)}
+        ${svgResistor(340, 175, 220, 'R_Gelb', isRem('r-yellow'), textCol)}
+        ${svgResistor(340, 238, 220, 'R_Grün', isRem('r-green'), textCol)}
+        ${wire([[452, 112], [536, 112]], '#ef4444')}
+        ${wire([[452, 175], [616, 175]], '#eab308')}
+        ${wire([[452, 238], [696, 238]], '#22c55e')}
+        ${svgLed(550, 112, '#ef4444', result.piTrafficLeds.red, 'Rot', false, textCol)}
+        ${svgLed(630, 175, '#facc15', result.piTrafficLeds.yellow, 'Gelb', false, textCol)}
+        ${svgLed(710, 238, '#22c55e', result.piTrafficLeds.green, 'Grün', false, textCol)}
+        ${wire([[564, 156], [564, 292], [190, 292]], gndWire)}
+        ${wire([[644, 219], [644, 292]], gndWire)}
+        ${wire([[724, 282], [724, 292], [564, 292]], gndWire)}
+      `;
+      break;
+    }
+
+    case 'pi-fan-pwm': {
+      espPins = [
+        { y: 92, label: '5V', color: '#f87171' },
+        { y: 185, label: `PWM G${p.outA.gpio}`, color: '#38bdf8' },
+        { y: 292, label: 'GND', color: '#94a3b8' },
+      ];
+      bodySvg = `
+        ${wire([[190, 92], [655, 92], [655, 130]], '#ef4444')}
+        ${wire([[190, 185], [450, 185]], '#38bdf8')}
+        ${wire([[190, 292], [520, 292]], gndWire)}
+        <g opacity="${isRem('fan-mosfet') ? 0.4 : 1}">
+          <rect x="450" y="140" width="84" height="72" rx="6" fill="#181c24" stroke="#94a3b8" stroke-width="2" />
+          <text x="492" y="175" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="#f8fafc">MOSFET</text>
+          <text x="492" y="194" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#38bdf8">G · D · S</text>
+        </g>
+        ${isRem('fan-mosfet') ? removedOverlay(450, 140, 84, 72) : ''}
+        ${wire([[510, 212], [510, 292]], gndWire)}
+        ${wire([[492, 212], [492, 240], [655, 240], [655, 224]], '#f59e0b')}
+        <g opacity="${isRem('pi-fan') ? 0.4 : 1}">
+          <rect x="605" y="130" width="100" height="94" rx="10" fill="#161b26" stroke="#38bdf8" stroke-width="2" />
+          <circle cx="655" cy="177" r="34" fill="#0f172a" stroke="#64748b" stroke-width="2" />
+          <circle cx="655" cy="177" r="10" fill="#0ea5e9" />
+          <text x="655" y="122" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="${textCol}">5V LÜFTER (${Math.round(result.piFanSpeedPct)}%)</text>
+        </g>
+        ${isRem('pi-fan') ? removedOverlay(605, 130, 100, 94) : ''}
+      `;
+      break;
+    }
+
+    case 'pi-oled-i2c': {
+      espPins = [
+        { y: 92, label: '3V3', color: '#f87171' },
+        { y: 165, label: `SDA G${p.sda.gpio}`, color: '#38bdf8' },
+        { y: 225, label: `SCL G${p.scl.gpio}`, color: '#facc15' },
+        { y: 292, label: 'GND', color: '#94a3b8' },
+      ];
+      bodySvg = `
+        ${wire([[190, 92], [510, 92], [510, 128]], '#ef4444')}
+        ${wire([[190, 165], [510, 165]], '#38bdf8', isRem('i2c-sda'))}
+        ${wire([[190, 225], [510, 225]], '#eab308')}
+        ${wire([[190, 292], [510, 292], [510, 250]], gndWire)}
+        <g opacity="${isRem('oled-display') ? 0.4 : 1}">
+          <rect x="510" y="106" width="225" height="156" rx="10" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2.2" />
+          <rect x="526" y="128" width="193" height="104" rx="4" fill="#03060c" stroke="#334155" stroke-width="1.5" />
+          <text x="536" y="148" font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="700" fill="#fde047">${esc(result.piOledLines[0] ?? 'OFFLINE')}</text>
+          <text x="536" y="172" font-family="JetBrains Mono, monospace" font-size="10" fill="#38bdf8">${esc(result.piOledLines[1] ?? '')}</text>
+          <text x="536" y="194" font-family="JetBrains Mono, monospace" font-size="10" fill="#38bdf8">${esc(result.piOledLines[2] ?? '')}</text>
+          <text x="536" y="216" font-family="JetBrains Mono, monospace" font-size="10" fill="#38bdf8">${esc(result.piOledLines[3] ?? '')}</text>
+          <text x="622" y="252" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="700" fill="#dbeafe">SSD1306 OLED (0x3C)</text>
+        </g>
+        ${isRem('oled-display') ? removedOverlay(510, 106, 225, 156) : ''}
+      `;
+      break;
+    }
   }
 
   return `
@@ -612,7 +695,7 @@ export function renderFritzingSvg(
       </text>
 
       ${mountVisual}
-      ${svgEspBoard(board.shortName, board.chipLabel, board.isMini, board.accentHex, espPins)}
+      ${svgEspBoard(board.shortName, board.chipLabel, board.isMini, board.pcbColorHex, board.accentHex, espPins)}
       ${bodySvg}
     </svg>
   `;

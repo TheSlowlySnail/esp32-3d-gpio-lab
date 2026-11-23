@@ -353,6 +353,79 @@ void loop() {
   delay(20);
 }`;
     }
+
+    case 'pi-traffic-light': {
+      if (board.family === 'raspberry-pi-mcu') {
+        return `# ${board.name} — MicroPython Ampel-Steuerung
+from machine import Pin
+import time
+
+red = Pin(${p.outA.gpio}, Pin.OUT)
+yellow = Pin(${p.outB.gpio}, Pin.OUT)
+green = Pin(${p.outC.gpio}, Pin.OUT)
+
+while True:
+    red.value(1); yellow.value(0); green.value(0); time.sleep(3)
+    red.value(1); yellow.value(1); green.value(0); time.sleep(1.2)
+    red.value(0); yellow.value(0); green.value(1); time.sleep(3)
+    red.value(0); yellow.value(1); green.value(0); time.sleep(1.2)`;
+      }
+      return `# ${board.name} — Python 3 (gpiozero) Ampel-Steuerung
+# Installation: sudo apt install python3-gpiozero
+from gpiozero import TrafficLights
+from time import sleep
+
+lights = TrafficLights(red=${p.outA.gpio}, amber=${p.outB.gpio}, green=${p.outC.gpio})
+
+while True:
+    lights.red.on();    lights.amber.off(); lights.green.off(); sleep(3.0)
+    lights.red.on();    lights.amber.on();  lights.green.off(); sleep(1.2)
+    lights.red.off();   lights.amber.off(); lights.green.on();  sleep(3.0)
+    lights.red.off();   lights.amber.on();  lights.green.off(); sleep(1.2)`;
+    }
+
+    case 'pi-fan-pwm': {
+      return `# ${board.name} — Temperaturgeregelte 5V PWM-Lueftersteuerung (Python 3)
+from gpiozero import PWMOutputDevice, CPUTemperature
+from time import sleep
+
+fan = PWMOutputDevice(pin=${p.outA.gpio}, frequency=1000)
+cpu = CPUTemperature()
+
+while True:
+    temp = cpu.temperature  # aktuell simuliert: ${Math.round(params.piCpuTempC)} °C
+    if temp < 45.0:
+        duty = 0.0
+    elif temp >= 75.0:
+        duty = 1.0
+    else:
+        duty = 0.25 + ((temp - 45.0) / 30.0) * 0.75
+    fan.value = duty
+    print(f"CPU: {temp:.1f} °C -> Fan PWM: {duty*100:.0f} %")
+    sleep(2)`;
+    }
+
+    case 'pi-oled-i2c': {
+      return `# ${board.name} — 0.96" SSD1306 I2C OLED Statusdisplay (0x3C)
+# Aktivieren: sudo raspi-config -> Interface Options -> I2C
+# Pakete: pip install luma.oled psutil
+from luma.core.interface.serial import i2c
+from luma.oled.device import ssd1306
+from luma.core.render import canvas
+import psutil, time
+
+serial = i2c(port=1, address=0x3C) # SDA=GPIO${p.sda.gpio}, SCL=GPIO${p.scl.gpio}
+device = ssd1306(serial, width=128, height=64)
+device.contrast(${Math.round((params.piOledContrastPct / 100) * 255)})
+
+while True:
+    with canvas(device) as draw:
+        draw.text((2, 0), "${board.shortName.toUpperCase()}", fill="white")
+        draw.text((2, 18), f"CPU Load: {psutil.cpu_percent()}%", fill="white")
+        draw.text((2, 34), f"RAM: {psutil.virtual_memory().percent}%", fill="white")
+        draw.text((2, 50), "I2C 0x3C OK", fill="white")
+    time.sleep(1)`;
+    }
   }
 }
 
@@ -660,6 +733,40 @@ light:
       - wled:
           port: 21324`;
     }
+
+    case 'pi-traffic-light': {
+      return `# ${board.name} — Systemd Service / Home Assistant GPIO Konfiguration
+# Hinweis: Auf Linux-Raspberry-Pi-Systemen läuft Steuerung typischerweise über Python/systemd
+# (oder auf dem Raspberry Pi Pico 2 W direkt via ESPHome RP2040/RP2350!).
+#
+# Pin-Belegung (${board.shortName}):
+#   Rot  -> GPIO ${p.outA.gpio} (über 220 Ohm)
+#   Gelb -> GPIO ${p.outB.gpio} (über 220 Ohm)
+#   Grün -> GPIO ${p.outC.gpio} (über 220 Ohm)
+#   GND  -> Pin 6 / 9 / 14 / 20`;
+    }
+
+    case 'pi-fan-pwm': {
+      return `# ${board.name} — /boot/firmware/config.txt Hardware-Lüftersteuerung
+# Für Raspberry Pi 4B / Pi 5 lässt sich der GPIO-Lüfter direkt im Kernel aktivieren:
+dtoverlay=gpio-fan,gpiopin=${p.outA.gpio},temp=55000
+
+# Alternativ für stufenloses PWM: siehe Python-Skript im linken Tab!`;
+    }
+
+    case 'pi-oled-i2c': {
+      return `# ${board.name} — Raspberry Pi I2C & OLED Setup (/boot/firmware/config.txt)
+dtparam=i2c_arm=on
+dtparam=i2c_arm_baudrate=400000
+
+# Shell-Test nach Neustart:
+#   sudo apt install i2c-tools
+#   i2cdetect -y 1   # Erwartet Adresse 0x3c (SSD1306 OLED)
+#
+# Verkabelung:
+#   VCC -> 3,3V (Pin 1) | GND -> Pin 6
+#   SDA -> GPIO ${p.sda.gpio} | SCL -> GPIO ${p.scl.gpio}`;
+    }
   }
 }
 
@@ -779,6 +886,15 @@ export class CodeGeneratorPanel {
   public update(params: CircuitParameters, result: SimulationResult): void {
     this.lastParams = { ...params };
     this.lastResult = result;
+    const board = getEspBoardById(params.boardId);
+    this.tabArduinoBtn.textContent =
+      board.family === 'raspberry-pi-sbc'
+        ? 'Python (Pi)'
+        : board.family === 'raspberry-pi-mcu'
+          ? 'MicroPython'
+          : 'Arduino C++';
+    this.tabEsphomeBtn.textContent =
+      params.topology.startsWith('pi-') ? 'Pi Config' : 'ESPHome YAML';
     this.refreshView(params, result);
   }
 

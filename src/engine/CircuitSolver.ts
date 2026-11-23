@@ -73,6 +73,12 @@ export class CircuitSolver {
       case 'wled-medium':
       case 'wled-long-injection':
         return this.solveWled(params, elapsedSeconds);
+      case 'pi-traffic-light':
+        return this.solvePiTrafficLight(params, elapsedSeconds);
+      case 'pi-fan-pwm':
+        return this.solvePiFanPwm(params, elapsedSeconds);
+      case 'pi-oled-i2c':
+        return this.solvePiOledI2c(params, elapsedSeconds);
     }
   }
 
@@ -125,6 +131,9 @@ export class CircuitSolver {
       wledDataGlitch: false,
       wledEffectiveBrightnessPct: params.wledBrightnessPct,
       wledBatteryRuntimeHours: 0,
+      piTrafficLeds: { red: false, yellow: false, green: false },
+      piFanSpeedPct: 0,
+      piOledLines: [],
       explanation: {
         statusBadge: 'AKTIV',
         statusTone: 'ok',
@@ -1496,6 +1505,259 @@ export class CircuitSolver {
       statusLedOn: brightness > 0.02,
       warnings,
       explanation,
+    });
+  }
+
+  // 17: Raspberry Pi Ampel-Steuerung (3x GPIO Output)
+  private solvePiTrafficLight(params: CircuitParameters, t: number): SimulationResult {
+    const board = getEspBoardById(params.boardId);
+    const p = board.pins;
+    const pinName = `G${p.outA.gpio}/G${p.outB.gpio}/G${p.outC.gpio}`;
+
+    let phase = params.piTrafficPhase;
+    if (params.piTrafficAuto) {
+      const cycle = t % 8.0;
+      if (cycle < 3.0) phase = 'red';
+      else if (cycle < 4.2) phase = 'red-yellow';
+      else if (cycle < 6.8) phase = 'green';
+      else phase = 'yellow';
+    }
+
+    const rRem = isRemoved(params, 'r-red');
+    const yRem = isRemoved(params, 'r-yellow');
+    const gRem = isRemoved(params, 'r-green');
+
+    const wantRed = phase === 'red' || phase === 'red-yellow';
+    const wantYellow = phase === 'red-yellow' || phase === 'yellow';
+    const wantGreen = phase === 'green';
+
+    const leds = {
+      red: wantRed && !rRem,
+      yellow: wantYellow && !yRem,
+      green: wantGreen && !gRem,
+    };
+
+    const iR = leds.red ? ((3.3 - 2.0) / 220) * 1000 : 0;
+    const iY = leds.yellow ? ((3.3 - 2.1) / 220) * 1000 : 0;
+    const iG = leds.green ? ((3.3 - 2.2) / 220) * 1000 : 0;
+    const totalMa = iR + iY + iG;
+
+    const activeCount = (leds.red ? 1 : 0) + (leds.yellow ? 1 : 0) + (leds.green ? 1 : 0);
+    const nodeV = activeCount > 0 ? 3.3 : 0;
+    const phaseLabel =
+      phase === 'red'
+        ? 'ROT (Halt)'
+        : phase === 'red-yellow'
+          ? 'ROT + GELB (Bereit)'
+          : phase === 'green'
+            ? 'GRÜN (Fahrt)'
+            : 'GELB (Achtung)';
+
+    const missing = [rRem ? 'Rot' : null, yRem ? 'Gelb' : null, gRem ? 'Grün' : null].filter(Boolean);
+    const warnings: CircuitWarning[] =
+      missing.length > 0
+        ? [
+            {
+              severity: 'warning',
+              code: 'PI_TRAFFIC_OPEN',
+              title: `Ampel-Vorwiderstand entfernt (${missing.join(', ')})`,
+              message: 'Die betroffene Ampel-Phase bleibt dunkel, obwohl der Raspberry Pi den GPIO auf HIGH schaltet.',
+            },
+          ]
+        : [];
+
+    return this.baseResult(params, t, {
+      probeLabel: `${board.shortName} Ampel (${pinName})`,
+      probePin: pinName,
+      nodeVoltage: nodeV,
+      currentMa: totalMa,
+      powerMw: 3.3 * totalMa,
+      logicLevel: activeCount > 0 ? 'HIGH' : 'LOW',
+      extraTitle: 'Ampel-Phase',
+      extraDisplay: phaseLabel,
+      extraPercent: phase === 'green' ? 100 : phase === 'red' ? 33 : 66,
+      piTrafficLeds: leds,
+      statusLedOn: activeCount > 0,
+      warnings,
+      explanation:
+        missing.length > 0
+          ? {
+              statusBadge: 'AMPEL-AUSFALL',
+              statusTone: 'warning',
+              whatHappens: `Phase „${phaseLabel}“ aktiv — doch der Kanal ${missing.join(' & ')} fällt wegen fehlendem 220-Ω-Vorwiderstand aus.`,
+              whyItHappens: 'Jede der drei Ampel-LEDs besitzt einen eigenen 220-Ω-Strombegrenzer an einem separaten Pi-GPIO (max. 16 mA pro Pin beim Raspberry Pi!).',
+            }
+          : {
+              statusBadge: phaseLabel,
+              statusTone: phase === 'green' ? 'ok' : phase === 'red' ? 'danger' : 'warning',
+              whatHappens: `Der ${board.shortName} schaltet die Ampel-Phase „${phaseLabel}“ (${totalMa.toFixed(1).replace('.', ',')} mA Gesamtstrom).`,
+              whyItHappens: 'Die 40-Pin-GPIO-Leiste arbeitet mit 3,3 V Logik. Drei getrennte 220-Ω-Widerstände halten jeden Kanal bei schonenden ~5–6 mA — weit unter dem 16-mA-Pin-Limit des Raspberry Pi.',
+            },
+    });
+  }
+
+  // 18: Raspberry Pi PWM-Lüftersteuerung (5 V Lüfter + MOSFET)
+  private solvePiFanPwm(params: CircuitParameters, t: number): SimulationResult {
+    const board = getEspBoardById(params.boardId);
+    const pinName = `PWM G${board.pins.outA.gpio}`;
+    const tempC = clamp(params.piCpuTempC, 35, 85);
+
+    const transistorRemoved = isRemoved(params, 'fan-mosfet');
+    const fanRemoved = isRemoved(params, 'pi-fan');
+
+    // Temperature curve: < 45 °C = 0 %, 45..75 °C = 25..100 % linear
+    let targetSpeed = params.piFanManualPct;
+    if (params.piFanAutoMode) {
+      if (tempC < 45) targetSpeed = 0;
+      else if (tempC >= 75) targetSpeed = 100;
+      else targetSpeed = 25 + ((tempC - 45) / 30) * 75;
+    }
+
+    const actualSpeed = transistorRemoved || fanRemoved ? 0 : clamp(targetSpeed, 0, 100);
+    const duty = actualSpeed / 100;
+    const phase = (t * 6.0) % 1;
+    const pulseHigh = duty >= 0.99 ? true : duty <= 0.01 ? false : phase < duty;
+    const fanMa = actualSpeed > 0 ? 45 + duty * 165 : 0; // 5V 40mm fan up to ~210 mA
+
+    const warnings: CircuitWarning[] = [];
+    if (transistorRemoved) {
+      warnings.push({
+        severity: 'warning',
+        code: 'PI_FAN_NO_DRIVER',
+        title: 'N-Kanal MOSFET / Treiber entfernt — Lüfter steht still!',
+        message: 'Ein 5-V-Lüfter (~200 mA) darf niemals direkt an einen 3,3-V-Pi-GPIO angeschlossen werden. Ohne Treiber bleibt er aus.',
+      });
+    } else if (tempC >= 75 && actualSpeed < 40) {
+      warnings.push({
+        severity: 'danger',
+        code: 'PI_OVERHEAT',
+        title: `CPU-Überhitzung (${Math.round(tempC)} °C) — Thermal Throttling!`,
+        message: 'Bei über 75 °C drosselt der Raspberry Pi seinen Takt. Erhöhe die Lüfter-Drehzahl oder aktiviere die Automatik.',
+      });
+    }
+
+    return this.baseResult(params, t, {
+      probeLabel: `${pinName} (Lüfter PWM)`,
+      probePin: pinName,
+      nodeVoltage: pulseHigh ? 3.3 : 0,
+      currentMa: fanMa,
+      powerMw: 5.0 * fanMa,
+      logicLevel: pulseHigh ? 'HIGH' : 'LOW',
+      extraTitle: 'Lüfter / CPU-Temp',
+      extraDisplay: `${Math.round(actualSpeed)} % · ${Math.round(tempC)} °C`,
+      extraPercent: actualSpeed,
+      piFanSpeedPct: actualSpeed,
+      statusLedOn: actualSpeed > 0,
+      warnings,
+      explanation: transistorRemoved
+        ? {
+            statusBadge: 'TREIBER FEHLT',
+            statusTone: 'warning',
+            whatHappens: `Der 5-V-Lüfter dreht sich nicht (0 %), obwohl die CPU ${Math.round(tempC)} °C warm ist.`,
+            whyItHappens: 'Der MOSFET trennt die 5-V-Lüfterleistung vom 3,3-V-Steuerpin. Ohne ihn ist der 5-V-Lastkreis unterbrochen.',
+          }
+        : {
+            statusBadge: actualSpeed > 0 ? `LÜFTER ${Math.round(actualSpeed)} %` : 'PASSIV / LEISE',
+            statusTone: tempC >= 75 ? 'danger' : actualSpeed > 0 ? 'ok' : 'info',
+            whatHappens:
+              actualSpeed > 0
+                ? `Bei ${Math.round(tempC)} °C CPU-Temperatur regelt der ${board.shortName} den 5-V-Lüfter per PWM auf ${Math.round(actualSpeed)} % (${fanMa.toFixed(0)} mA).`
+                : `Bei kühlen ${Math.round(tempC)} °C bleibt der Lüfter komplett aus (0 dB Silent-Modus).`,
+            whyItHappens: 'Über Hardware-PWM am MOSFET-Gate wird die 5-V-Versorgung des Lüfters gepulst, sodass die Drehzahl stufenlos der SoC-Temperatur folgt.',
+          },
+    });
+  }
+
+  // 19: Raspberry Pi I2C OLED Display (SSD1306 128x64)
+  private solvePiOledI2c(params: CircuitParameters, t: number): SimulationResult {
+    const board = getEspBoardById(params.boardId);
+    const pinName = `SDA G${board.pins.sda.gpio}`;
+    const oledRemoved = isRemoved(params, 'oled-display');
+    const sdaRemoved = isRemoved(params, 'i2c-sda');
+
+    const cycle = t % 0.6;
+    let nodeV = 3.3;
+    let logic: LogicLevel = 'HIGH';
+
+    if (sdaRemoved) {
+      nodeV = clamp(0.4 + Math.sin(t * 40) * 0.25, 0, 3.3);
+      logic = 'FLOATING';
+    } else if (!oledRemoved && cycle < 0.22) {
+      const slot = Math.floor((cycle / 0.22) * 16);
+      nodeV = [0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0][slot % 16] ? 3.3 : 0.08;
+      logic = this.classifyLogicLevel(nodeV);
+    }
+
+    const tempSim = (44.2 + Math.sin(t * 0.4) * 1.4).toFixed(1);
+    const lines =
+      oledRemoved || sdaRemoved
+        ? []
+        : params.piOledPage === 'system'
+          ? [
+              `${board.shortName.toUpperCase()}`,
+              `CPU: ${tempSim} C  LOAD 18%`,
+              `RAM: 1.4 / 8.0 GB`,
+              `I2C 0x3C  OK`,
+            ]
+          : params.piOledPage === 'network'
+            ? [
+                'WLAN0 CONNECTED',
+                'IP: 192.168.178.42',
+                'RSSI: -54 dBm',
+                'SSH: ACTIVE :22',
+              ]
+            : [
+                'GPIO MONITOR 3.3V',
+                `SDA: G${board.pins.sda.gpio}  SCL: G${board.pins.scl.gpio}`,
+                'BUS: 400 kHz FAST',
+                `CONTRAST: ${Math.round(params.piOledContrastPct)}%`,
+              ];
+
+    const currentMa = oledRemoved ? 0 : 8 + (params.piOledContrastPct / 100) * 14;
+    const warnings: CircuitWarning[] = [];
+    if (sdaRemoved) {
+      warnings.push({
+        severity: 'danger',
+        code: 'OLED_SDA_OPEN',
+        title: 'I²C SDA-Datenleitung entfernt!',
+        message: 'Das SSD1306-OLED erhält keine Pixel-Frames mehr (Remote I/O Error 121 auf Adresse 0x3C).',
+      });
+    } else if (oledRemoved) {
+      warnings.push({
+        severity: 'warning',
+        code: 'OLED_REMOVED',
+        title: 'SSD1306 OLED-Display entfernt',
+        message: 'i2cdetect findet kein Gerät an Adresse 0x3C.',
+      });
+    }
+
+    return this.baseResult(params, t, {
+      probeLabel: `${pinName} / SCL G${board.pins.scl.gpio} (OLED 0x3C)`,
+      probePin: pinName,
+      nodeVoltage: nodeV,
+      currentMa,
+      powerMw: 3.3 * currentMa,
+      logicLevel: logic,
+      extraTitle: 'OLED 128×64 (0x3C)',
+      extraDisplay: oledRemoved || sdaRemoved ? 'Offline' : `Aktiv (${Math.round(params.piOledContrastPct)} %)`,
+      extraPercent: oledRemoved || sdaRemoved ? 0 : params.piOledContrastPct,
+      piOledLines: lines,
+      statusLedOn: !oledRemoved && !sdaRemoved,
+      warnings,
+      explanation:
+        sdaRemoved || oledRemoved
+          ? {
+              statusBadge: 'I²C 0x3C OFFLINE',
+              statusTone: 'danger',
+              whatHappens: 'Der kleine OLED-Bildschirm bleibt schwarz — der Raspberry Pi meldet einen I²C-Kommunikationsfehler.',
+              whyItHappens: 'Ohne intakte SDA-Datenleitung (und das OLED-Modul an Adresse 0x3C) kann Python per `luma.oled` keinen Framebuffer übertragen.',
+            }
+          : {
+              statusBadge: 'OLED 0x3C ONLINE',
+              statusTone: 'ok',
+              whatHappens: `Das 0,96"-SSD1306-OLED zeigt live „${params.piOledPage.toUpperCase()}“-Daten mit ${Math.round(params.piOledContrastPct)} % Kontrast bei nur ${currentMa.toFixed(1).replace('.', ',')} mA.`,
+              whyItHappens: 'Jedes Pixel des OLEDs leuchtet selbstständig (keine Hintergrundbeleuchtung nötig). Der Raspberry Pi überträgt die Bilddaten über nur 2 I²C-Leitungen (SDA/SCL). Tipp: Dunkle den Raum ab, um den Kontrast zu sehen!',
+            },
     });
   }
 }

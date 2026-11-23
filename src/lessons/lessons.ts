@@ -22,7 +22,8 @@ export type LessonCategory =
   | 'PWM & Leistung'
   | 'Sensoren & Busse'
   | 'Aktoren'
-  | 'WLED & LED-Streifen';
+  | 'WLED & LED-Streifen'
+  | 'Raspberry Pi';
 
 export interface LessonDefinition {
   id: CircuitTopologyId;
@@ -31,6 +32,7 @@ export interface LessonDefinition {
   shortTitle: string;
   subtitle: string;
   category: LessonCategory;
+  recommendedBoardId?: EspBoardId;
   difficulty: 'Einstieg' | 'Grundlagen' | 'Fortgeschritten' | 'Profi';
   pinRole: string;
   getPrimaryPin: (boardId: EspBoardId) => string;
@@ -774,6 +776,136 @@ export const LESSONS: LessonDefinition[] = [
     },
     cameraPreset: WLED_CAMERA,
   },
+
+  // === RASPBERRY PI RUBRIK (LEKTIONEN 17–19) ===
+  {
+    id: 'pi-traffic-light',
+    number: '17',
+    title: 'Raspberry Pi Ampel-Steuerung (Python GPIO)',
+    shortTitle: 'Pi Ampel (3× LED)',
+    subtitle: '3-Phasen-Ampel über die 40-Pin-GPIO-Leiste mit Python (gpiozero)',
+    category: 'Raspberry Pi',
+    recommendedBoardId: 'rpi-5',
+    difficulty: 'Einstieg',
+    pinRole: '3× Pi GPIO Output (3,3 V)',
+    getPrimaryPin: (b) => {
+      const p = getEspBoardById(b).pins;
+      return `G${p.outA.gpio}/G${p.outB.gpio}/G${p.outC.gpio}`;
+    },
+    summary:
+      'Der Klassiker zum Einstieg in die 40-Pin-GPIO-Leiste des Raspberry Pi: Drei LEDs (Rot, Gelb, Grün) werden mit eigenen 220-Ω-Vorwiderständen über ein Python-Skript als deutsche Ampel geschaltet.',
+    keyTakeaways: [
+      'Raspberry-Pi-GPIOs arbeiten mit 3,3 V und vertragen max. 16 mA pro Pin (gesamte Leiste max. 50 mA).',
+      'Jede LED braucht ihren eigenen 220-Ω-Vorwiderstand (~5–6 mA pro Kanal).',
+      'Wechsle oben das MCU-Board, um dieselbe Schaltung auf Pi 5, Pi 4B, Pi Zero 2 W oder Pi Pico 2 W (MicroPython) zu testen!',
+    ],
+    formulas: [
+      { label: 'Pin-Limit Pi', expression: 'I_GPIO ≤ 16 mA (Summe ≤ 50 mA)' },
+      { label: 'LED-Strom', expression: 'I = (3,3 V − V_f) / 220 Ω ≈ 5,5 mA' },
+    ],
+    challenges: [
+      {
+        id: 'pi-ampel-dark',
+        text: 'Aktiviere „Raum dunkel“ in der Toolbar und beobachte den farbigen Ampelschein auf dem Steckbrett!',
+        hint: 'Im abgedunkelten Labor siehst du die Phasenwechsel Rot → Rot-Gelb → Grün besonders deutlich.',
+      },
+    ],
+    removableParts: [
+      { id: 'r-red', label: 'Vorwiderstand Rot (220 Ω)', shortLabel: 'R Rot', role: 'Begrenzt Strom der roten Ampel-LED', removedEffectHint: 'Rote Phase fällt aus' },
+      { id: 'r-yellow', label: 'Vorwiderstand Gelb (220 Ω)', shortLabel: 'R Gelb', role: 'Begrenzt Strom der gelben Ampel-LED', removedEffectHint: 'Gelbe Phase fällt aus' },
+      { id: 'r-green', label: 'Vorwiderstand Grün (220 Ω)', shortLabel: 'R Grün', role: 'Begrenzt Strom der grünen Ampel-LED', removedEffectHint: 'Grüne Phase fällt aus' },
+    ],
+    defaultParams: {
+      topology: 'pi-traffic-light',
+      piTrafficAuto: true,
+      piTrafficPhase: 'red',
+    },
+    cameraPreset: DEFAULT_CAMERA,
+  },
+  {
+    id: 'pi-fan-pwm',
+    number: '18',
+    title: 'Raspberry Pi PWM-Lüftersteuerung (5 V)',
+    shortTitle: 'Pi PWM-Lüfter',
+    subtitle: 'Temperaturabhängige Kühlung über N-Kanal-MOSFET und Hardware-PWM',
+    category: 'Raspberry Pi',
+    recommendedBoardId: 'rpi-4b',
+    difficulty: 'Grundlagen',
+    pinRole: 'Hardware-PWM → MOSFET → 5V Lüfter',
+    getPrimaryPin: (b) => `PWM GPIO ${getEspBoardById(b).pins.outA.gpio}`,
+    summary:
+      'Ein 5-V-Gehäuselüfter (~200 mA) würde einen 3,3-V-Pi-GPIO sofort überlasten. Über einen Logic-Level-MOSFET regelt Python die Lüfter-Drehzahl stufenlos anhand der CPU-Temperatur.',
+    keyTakeaways: [
+      'Unter 45 °C bleibt der Lüfter komplett stumm (0 % PWM).',
+      'Zwischen 45 °C und 75 °C steigt die Drehzahl linear bis auf 100 % — live am 3D-Rotor sichtbar!',
+      'Der 5-V-Laststrom kommt direkt von der 5-V-Schiene, nicht vom 3,3-V-GPIO.',
+    ],
+    formulas: [
+      { label: 'Lüfterleistung', expression: 'P = 5,0 V · I_Fan (bis ~1,0 W)' },
+      { label: 'Temp-Kurve', expression: '45 °C → 25 % | 75 °C → 100 %' },
+    ],
+    challenges: [
+      {
+        id: 'pi-fan-heat',
+        text: 'Schiebe die CPU-Temperatur von 40 °C auf 80 °C und beobachte, wie der 3D-Lüfter hochdreht!',
+        hint: 'Teste auch das Entfernen des MOSFETs, um den Ausfall der Kühlung zu sehen.',
+      },
+    ],
+    removableParts: [
+      { id: 'fan-mosfet', label: 'N-Kanal MOSFET Treiber', shortLabel: 'MOSFET', role: 'Schaltet den 5-V-Lüfterstrom sicher per 3,3-V-PWM', removedEffectHint: 'Lüfter bleibt trotz Hitze stehen!' },
+      { id: 'pi-fan', label: '5V Axiallüfter (40 mm)', shortLabel: '5V Lüfter', role: 'Kühlt den Raspberry-Pi-SoC aktiv', removedEffectHint: 'Keine aktive Kühlung' },
+    ],
+    defaultParams: {
+      topology: 'pi-fan-pwm',
+      piCpuTempC: 58,
+      piFanAutoMode: true,
+      piFanManualPct: 65,
+    },
+    cameraPreset: DEFAULT_CAMERA,
+  },
+  {
+    id: 'pi-oled-i2c',
+    number: '19',
+    title: 'Raspberry Pi I²C OLED-Display (SSD1306)',
+    shortTitle: 'Pi I²C OLED-Screen',
+    subtitle: 'Mini-Statusdisplay (128×64 Pixel) für CPU-Temp, IP-Adresse & GPIO-Status',
+    category: 'Raspberry Pi',
+    recommendedBoardId: 'rpi-zero-2w',
+    difficulty: 'Fortgeschritten',
+    pinRole: 'I²C Bus (SDA / SCL · 0x3C)',
+    getPrimaryPin: (b) => {
+      const p = getEspBoardById(b).pins;
+      return `SDA G${p.sda.gpio} / SCL G${p.scl.gpio}`;
+    },
+    summary:
+      'Ein 0,96-Zoll-SSD1306-OLED benötigt nur 4 Kabel (3,3 V, GND, SDA, SCL) und macht jeden Raspberry Pi Zero 2 W, Pi 4 oder Pi 5 zum schicken Mini-Monitor für IP-Adresse, Auslastung und Sensoren.',
+    keyTakeaways: [
+      'I²C-Adresse des SSD1306 ist standardmäßig 0x3C (prüfbar unter Linux via `i2cdetect -y 1`).',
+      'OLED-Pixel leuchten selbstständig — extrem hoher Kontrast im dunklen Raum!',
+      'Wechsle zwischen den Display-Seiten (System / Netzwerk / GPIO) direkt am 3D-Screen.',
+    ],
+    formulas: [
+      { label: 'Auflösung', expression: '128 × 64 px (1024 Byte Framebuffer)' },
+      { label: 'I²C-Adresse', expression: '0x3C @ 400 kHz Fast-Mode' },
+    ],
+    challenges: [
+      {
+        id: 'pi-oled-dark',
+        text: 'Dunkle den Raum ab und schalte durch die 3 Display-Seiten (System, Netzwerk, GPIO)!',
+        hint: 'Im dunklen Raum strahlt das blau-gelbe OLED-Panel besonders realistisch.',
+      },
+    ],
+    removableParts: [
+      { id: 'i2c-sda', label: 'I²C SDA-Datenleitung', shortLabel: 'SDA-Kabel', role: 'Überträgt Bilddaten vom Pi an das OLED', removedEffectHint: 'Display bleibt schwarz (I²C Error 121)' },
+      { id: 'oled-display', label: 'SSD1306 OLED-Modul', shortLabel: 'OLED 128×64', role: 'Selbstleuchtendes 0,96"-I²C-Display', removedEffectHint: 'Kein Gerät an Adresse 0x3C' },
+    ],
+    defaultParams: {
+      topology: 'pi-oled-i2c',
+      piOledPage: 'system',
+      piOledContrastPct: 90,
+    },
+    cameraPreset: DEFAULT_CAMERA,
+  },
 ];
 
 export function getLessonById(id: CircuitTopologyId): LessonDefinition {
@@ -846,5 +978,13 @@ export function createInitialCircuitParameters(): CircuitParameters {
     wledPowerSource: 'meanwell-battery',
     wledBatteryCapacityMah: 10000,
     wledBatterySocPct: 85,
+
+    piTrafficAuto: true,
+    piTrafficPhase: 'red',
+    piCpuTempC: 58,
+    piFanAutoMode: true,
+    piFanManualPct: 65,
+    piOledPage: 'system',
+    piOledContrastPct: 90,
   };
 }

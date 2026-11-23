@@ -9,8 +9,11 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 ## Highlights & Features
 
 - **Interaktive 3D-Szene (Three.js + OrbitControls):**
-  - Maßstabsgetreue 3D-Bauteile mit weichen Schatten, Live-LED-Glow (`emissiveIntensity`, additiver Halo, `PointLight`), automatisch aktualisierten 4-Band-Widerstandsfarbringen (IEC 60062), klickbarem 3D-Taster, drehendem SG90-Servo-Arm, 24-GHz-HLK-LD2490-Radarwellen, Mean Well 5V-Netzteil/Akku-Pack und flexiblen WS2812B-WLED-Streifen.
-  - **6 wählbare ESP-Modelle (inkl. Mini-Boards):** `ESP32 DevKit V1`, `ESP32-S3 DevKitC-1 (Dual USB-C)`, `ESP32-C6 DevKitC-1 (Wi-Fi 6 / Zigbee)`, `ESP32-C3 SuperMini [MINI]`, `ESP32-S3-Zero [MINI]` und `ESP32 D1 Mini [MINI]`.
+  - Maßstabsgetreue 3D-Bauteile mit weichen Schatten, Live-LED-Glow (`emissiveIntensity`, additiver Halo, `PointLight`), automatisch aktualisierten 4-Band-Widerstandsfarbringen (IEC 60062), klickbarem 3D-Taster, drehendem SG90-Servo-Arm, 24-GHz-HLK-LD2490-Radarwellen, Mean Well 5V-Netzteil/Akku-Pack, flexiblen WS2812B-WLED-Streifen, rotierendem 5-V-Axiallüfter und selbstleuchtendem 0,96"-SSD1306-OLED-Display.
+  - **10 wählbare Mikrocomputer & Mikrocontroller (inkl. eigener Vergleichs-Rubrik „Boards (10)“):**
+    - *ESP32 Standard & Mini:* `ESP32 DevKit V1`, `ESP32-S3 DevKitC-1 (Dual USB-C)`, `ESP32-C6 DevKitC-1 (Wi-Fi 6 / Zigbee)`, `ESP32-C3 SuperMini`, `ESP32-S3-Zero`, `ESP32 D1 Mini`
+    - *Raspberry Pi (Linux SBC & MCU):* `Raspberry Pi 5 (8 GB)`, `Raspberry Pi 4 Model B`, `Raspberry Pi Zero 2 W`, `Raspberry Pi Pico 2 W (RP2350)`
+  - **Raum abdunkeln (`Raum dunkel`):** Dimmt das 3D-Umgebungslicht auf Dunkelraum-Niveau herunter, sodass LEDs, WLED-Streifen, Ampel und das SSD1306-OLED besonders kontrastreich strahlen.
   - **Mit Steckbrett oder „Ohne Breadboard“:** Per Klick lässt sich das Steckbrett ausblenden und die komplette Schaltung als fertiger Direktaufbau mit **WAGO 221-415 Hebelklemmen** anzeigen.
 - **Reine Schaltungs-Simulations-Engine (`src/engine/`, 0 % Three.js):**
   - Berechnet Spannungen, Ströme (Ohmsches Gesetz), Leistungen, ESP32-Logikpegel (`HIGH`, `LOW`, `FLOATING` inkl. 50-Hz-Netzbrummen, `UNDEFINED`), 12-Bit-ADC-Werte (0–4095), RC-Zeitkonstanten ($\tau = R \cdot C$), induktive Relais-Abschaltspitzen, WLED-Spannungsabfall (Voltage Drop) und Akku-Restlaufzeiten.
@@ -24,7 +27,7 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ---
 
-## Übersicht der 16 interaktiven Lektionen
+## Übersicht der 19 interaktiven Lektionen
 
 | Nr. | Kategorie | Lektion | Schwerpunkte |
 | --- | --- | --- | --- |
@@ -44,6 +47,9 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 | **14** | WLED & LED-Streifen | **WLED Kompakt-Streifen (16 LEDs / 0,5 m)** | WS2812B 800 kHz, 330 Ω Datenwiderstand, 1000 µF Elko, Mean Well PSU / Akku-Pack |
 | **15** | WLED & LED-Streifen | **WLED Raum-Streifen (60 LEDs / 2 m) & Pegelwandler** | 74AHCT125 Pegelwandler (3,3 V → 5 V), WLED-Strombegrenzer, Daten-Glitch-Simulation |
 | **16** | WLED & LED-Streifen | **WLED Lang-Streifen (180–300 LEDs / 5 m) & Power Injection** | Spannungsabfall (Voltage Drop → Gelb-/Rotstich am Ende), beidseitige 5-V-Einspeisung |
+| **17** | Raspberry Pi | **Raspberry Pi Ampel-Steuerung (Python GPIO)** | 40-Pin-GPIO-Leiste, 3× 220 Ω + Rot/Gelb/Grün LEDs, Python (`gpiozero`) & MicroPython |
+| **18** | Raspberry Pi | **Raspberry Pi PWM-Lüftersteuerung (5 V)** | Temperaturkurve (35–85 °C), N-Kanal-MOSFET, drehender 3D-Axiallüfter |
+| **19** | Raspberry Pi | **Raspberry Pi I²C OLED-Display (SSD1306)** | 128×64 Zweifarben-OLED (0x3C), Live-System-/Netzwerk-/GPIO-Anzeige (`luma.oled`) |
 
 ---
 

@@ -18,7 +18,13 @@ export type EspBoardId =
   | 'esp32-s3-zero'
   | 'esp32-d1-mini'
   | 'esp32-s3-devkitc'
-  | 'esp32-c6-devkit';
+  | 'esp32-c6-devkit'
+  | 'rpi-5'
+  | 'rpi-4b'
+  | 'rpi-zero-2w'
+  | 'rpi-pico-2w';
+
+export type BoardFamily = 'esp32' | 'raspberry-pi-sbc' | 'raspberry-pi-mcu';
 
 export type CircuitTopologyId =
   | 'led-resistor'
@@ -36,7 +42,10 @@ export type CircuitTopologyId =
   | 'piezo-buzzer'
   | 'wled-compact'
   | 'wled-medium'
-  | 'wled-long-injection';
+  | 'wled-long-injection'
+  | 'pi-traffic-light'
+  | 'pi-fan-pwm'
+  | 'pi-oled-i2c';
 
 export type ComponentCategory = 'mcu' | 'passive' | 'active' | 'input' | 'sensor' | 'board';
 
@@ -87,13 +96,18 @@ export interface EspBoardSpec {
   id: EspBoardId;
   name: string;
   shortName: string;
+  family: BoardFamily;
   isMini: boolean;
   chipLabel: string;
   architecture: string;
   wireless: string;
   flash: string;
+  voltageInfo: string;
+  idealFor: string;
+  overview: string;
+  highlights: string[];
   esphomeBoard: string;
-  esphomeVariant: 'ESP32' | 'ESP32C3' | 'ESP32S3' | 'ESP32C6';
+  esphomeVariant: 'ESP32' | 'ESP32C3' | 'ESP32S3' | 'ESP32C6' | 'RP2350' | 'LINUX_SBC';
   pcbColorHex: string;
   accentHex: string;
   width: number;
@@ -213,8 +227,21 @@ export interface CircuitParameters {
   wledPowerInjection: boolean;
   wledCurrentLimitMa: number;
   wledPowerSource: WledPowerSourceId;
-  wledBatteryCapacityMah: number; // z.B. 5000 .. 20000 mAh
-  wledBatterySocPct: number; // 10 .. 100 % Ladezustand
+  wledBatteryCapacityMah: number;
+  wledBatterySocPct: number;
+
+  // 17: Raspberry Pi Ampel
+  piTrafficAuto: boolean;
+  piTrafficPhase: 'red' | 'red-yellow' | 'green' | 'yellow';
+
+  // 18: Raspberry Pi PWM-Lüfter
+  piCpuTempC: number; // 35..85 °C
+  piFanAutoMode: boolean;
+  piFanManualPct: number; // 0..100 %
+
+  // 19: Raspberry Pi I2C OLED SSD1306
+  piOledPage: 'system' | 'network' | 'gpio';
+  piOledContrastPct: number; // 10..100 %
 }
 
 export interface CircuitWarning {
@@ -268,6 +295,11 @@ export interface SimulationResult {
   wledDataGlitch: boolean; // true when data resistor or level shifter removed
   wledEffectiveBrightnessPct: number;
   wledBatteryRuntimeHours: number; // geschätzte Laufzeit im Akku-Betrieb
+
+  // Raspberry Pi specialty outputs
+  piTrafficLeds: { red: boolean; yellow: boolean; green: boolean };
+  piFanSpeedPct: number;
+  piOledLines: string[];
 
   // Live human-readable narration of what happens & why
   explanation: SceneExplanation;

@@ -27,6 +27,7 @@ class LearnEsp32App {
   private readonly solver = new CircuitSolver();
   private params: CircuitParameters = createInitialCircuitParameters();
   private theme: ThemeMode = 'dark';
+  private roomDimmed = false;
 
   private sceneManager!: SceneManager;
   private telemetryHud!: TelemetryHud;
@@ -38,8 +39,10 @@ class LearnEsp32App {
   private lessonSelectEl!: HTMLSelectElement;
   private boardSelectEl!: HTMLSelectElement;
   private themeBtnEl!: HTMLButtonElement;
+  private roomDimBtnEl!: HTMLButtonElement;
   private noBreadboardBtnEl!: HTMLButtonElement;
   private schematicModalEl!: HTMLElement;
+  private boardsModalEl!: HTMLElement;
   private hoverTooltipEl!: HTMLElement;
   private sceneSectionEl!: HTMLElement;
 
@@ -75,6 +78,7 @@ class LearnEsp32App {
       'Sensoren & Busse',
       'Aktoren',
       'WLED & LED-Streifen',
+      'Raspberry Pi',
     ];
 
     const lessonOptionsHtml = categories
@@ -86,14 +90,21 @@ class LearnEsp32App {
       })
       .join('');
 
-    const standardBoards = ESP_BOARDS.filter((b) => !b.isMini)
+    const espStandard = ESP_BOARDS.filter((b) => b.family === 'esp32' && !b.isMini)
       .map((b) => `<option value="${b.id}">${b.name}</option>`)
       .join('');
-    const miniBoards = ESP_BOARDS.filter((b) => b.isMini)
+    const espMinis = ESP_BOARDS.filter((b) => b.family === 'esp32' && b.isMini)
       .map((b) => `<option value="${b.id}">${b.name} [MINI]</option>`)
+      .join('');
+    const rpiSbcs = ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-sbc')
+      .map((b) => `<option value="${b.id}">${b.name}${b.isMini ? ' [MINI]' : ''}</option>`)
+      .join('');
+    const rpiMcus = ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-mcu')
+      .map((b) => `<option value="${b.id}">${b.name} [MCU]</option>`)
       .join('');
 
     const registryCount = defaultComponentRegistry.getAll().length;
+    const boardCount = ESP_BOARDS.length;
 
     this.root.innerHTML = `
       <!-- Top Navigation Bar -->
@@ -108,18 +119,18 @@ class LearnEsp32App {
           </div>
           <div class="leading-tight hidden md:block">
             <div class="flex items-center gap-1.5">
-              <h1 class="text-sm font-bold tracking-tight eng-text-main">Learn ESP32 3D</h1>
+              <h1 class="text-sm font-bold tracking-tight eng-text-main">Learn ESP &amp; Pi 3D</h1>
               <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 eng-text-accent border border-cyan-500/30">
-                16 LABS
+                19 LABS
               </span>
             </div>
-            <p class="text-[10.5px] eng-text-muted">6 ESP-Boards · WLED · Interaktive Diagnose</p>
+            <p class="text-[10.5px] eng-text-muted">${boardCount} Boards (ESP32 &amp; Raspberry Pi) · WLED</p>
           </div>
         </div>
 
-        <!-- Center Selectors: Lesson Picker (16) + ESP Board Picker (6) -->
+        <!-- Center Selectors: Lesson Picker (19) + Board Picker (10) -->
         <div class="flex items-center gap-2 min-w-0 flex-1 justify-center">
-          <div class="flex items-center gap-1 min-w-0 max-w-[345px] w-full">
+          <div class="flex items-center gap-1 min-w-0 max-w-[325px] w-full">
             <button type="button" data-action="prev-lesson" title="Vorherige Lektion" class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0">◀</button>
             <select data-select="lesson" aria-label="Lektion auswählen" class="eng-select eng-input flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer focus:outline-none focus:border-cyan-500">
               ${lessonOptionsHtml}
@@ -128,10 +139,12 @@ class LearnEsp32App {
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0">
-            <span class="hidden xl:inline text-[11px] font-mono eng-text-muted">MCU:</span>
-            <select data-select="board" aria-label="ESP-Modell auswählen" class="eng-select eng-input px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium cursor-pointer max-w-[220px] focus:outline-none focus:border-cyan-500">
-              <optgroup label="Standard DevKits">${standardBoards}</optgroup>
-              <optgroup label="Mini-Boards">${miniBoards}</optgroup>
+            <span class="hidden 2xl:inline text-[11px] font-mono eng-text-muted">Board:</span>
+            <select data-select="board" aria-label="Mikrocomputer auswählen" class="eng-select eng-input px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium cursor-pointer max-w-[205px] focus:outline-none focus:border-cyan-500">
+              <optgroup label="ESP32 Standard DevKits">${espStandard}</optgroup>
+              <optgroup label="ESP32 Mini-Boards">${espMinis}</optgroup>
+              <optgroup label="Raspberry Pi (Linux SBC)">${rpiSbcs}</optgroup>
+              <optgroup label="Raspberry Pi (Mikrocontroller)">${rpiMcus}</optgroup>
             </select>
           </div>
         </div>
@@ -140,12 +153,32 @@ class LearnEsp32App {
         <div class="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            data-action="open-boards"
+            title="Alle 10 Mikrocomputer &amp; Mikrocontroller im Vergleich kennenlernen"
+            class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap"
+          >
+            <span class="eng-text-accent">▣</span>
+            <span>Boards (${boardCount})</span>
+          </button>
+
+          <button
+            type="button"
+            data-action="toggle-room-dim"
+            title="3D-Raumlicht abdunkeln, damit LEDs, WLED-Streifen, Ampel und OLED stark leuchten"
+            class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap"
+          >
+            <span data-dim-icon>💡</span>
+            <span data-dim-label class="hidden lg:inline">Raum dunkel</span>
+          </button>
+
+          <button
+            type="button"
             data-action="toggle-breadboard"
             title="Zwischen Steckbrett-Aufbau und Direktverdrahtung (WAGO 221 ohne Breadboard) wechseln"
             class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap"
           >
             <span data-bb-dot class="w-2 h-2 rounded-full bg-slate-400"></span>
-            <span data-bb-label>Ohne Breadboard</span>
+            <span data-bb-label class="hidden xl:inline">Ohne Breadboard</span>
           </button>
 
           <button
@@ -155,17 +188,17 @@ class LearnEsp32App {
             class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap"
           >
             <span class="eng-text-accent font-mono">◈</span>
-            <span class="hidden sm:inline">Schaltplan</span>
+            <span class="hidden lg:inline">Schaltplan</span>
           </button>
 
           <button
             type="button"
             data-action="toggle-theme"
             title="Zwischen Hell- und Dunkelmodus wechseln"
-            class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium"
+            class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1 font-medium"
           >
             <span data-theme-icon>☀️</span>
-            <span data-theme-label class="hidden xl:inline">Hell</span>
+            <span data-theme-label class="hidden 2xl:inline">Hell</span>
           </button>
 
           <button
@@ -182,10 +215,10 @@ class LearnEsp32App {
           <button
             type="button"
             data-action="toggle-registry"
-            class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer font-mono hidden 2xl:inline-flex"
+            class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs transition cursor-pointer font-mono hidden 2xl:inline-flex"
             title="Registrierte Bauteile anzeigen"
           >
-            Bauteile (${registryCount})
+            Teile (${registryCount})
           </button>
         </div>
       </header>
@@ -274,13 +307,31 @@ class LearnEsp32App {
           <div data-mount="modal-fritzing" class="p-3 bg-transparent aspect-[820/365] max-h-[74vh] w-full flex items-center justify-center"></div>
         </div>
       </div>
+
+      <!-- Rubrik: Alle Mikrocomputer & Mikrocontroller im Überblick -->
+      <div data-modal="boards" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm items-center justify-center p-4">
+        <div class="eng-card w-full max-w-5xl rounded-xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+          <div class="eng-header flex items-center justify-between px-5 py-3.5 border-b gap-3">
+            <div>
+              <h3 class="text-sm font-bold eng-text-main">Mikrocomputer &amp; Mikrocontroller — Alle ${boardCount} Boards im Überblick</h3>
+              <p class="text-xs eng-text-muted">Vergleich zwischen ESP32-Mikrocontrollern (Echtzeit, Stromspar, WLAN/Zigbee) und Raspberry Pi Einplatinencomputern (Linux SBC, 40-Pin-GPIO &amp; Python)</p>
+            </div>
+            <button type="button" data-action="close-boards" class="eng-btn-neutral px-3 py-1.5 rounded-lg border text-xs cursor-pointer">
+              Schließen
+            </button>
+          </div>
+          <div data-mount="boards-showcase" class="p-5 overflow-y-auto flex flex-col gap-5"></div>
+        </div>
+      </div>
     `;
 
     this.lessonSelectEl = this.root.querySelector('[data-select="lesson"]')!;
     this.boardSelectEl = this.root.querySelector('[data-select="board"]')!;
     this.themeBtnEl = this.root.querySelector('[data-action="toggle-theme"]')!;
+    this.roomDimBtnEl = this.root.querySelector('[data-action="toggle-room-dim"]')!;
     this.noBreadboardBtnEl = this.root.querySelector('[data-action="toggle-breadboard"]')!;
     this.schematicModalEl = this.root.querySelector('[data-modal="schematic"]')!;
+    this.boardsModalEl = this.root.querySelector('[data-modal="boards"]')!;
     this.hoverTooltipEl = this.root.querySelector('[data-tooltip="hover"]')!;
     this.sceneSectionEl = this.root.querySelector('[data-section="scene"]')!;
   }
@@ -312,6 +363,99 @@ class LearnEsp32App {
     });
 
     this.populateRegistryModal();
+    this.populateBoardsShowcaseModal();
+  }
+
+  private populateBoardsShowcaseModal(): void {
+    const mount = this.root.querySelector('[data-mount="boards-showcase"]');
+    if (!mount) return;
+
+    const groups = [
+      {
+        title: 'Raspberry Pi — Einplatinencomputer (Linux SBC)',
+        subtitle: 'Vollwertige Linux-Computer mit 40-Pin-GPIO-Leiste, Python (gpiozero), HDMI, Netzwerk & eigenem Betriebssystem.',
+        items: ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-sbc'),
+      },
+      {
+        title: 'Raspberry Pi — Mikrocontroller (RP2350)',
+        subtitle: 'Startet in Millisekunden ohne Betriebssystem, ideal für MicroPython, PIO-Echtzeit-Timing und 12-Bit-ADC.',
+        items: ESP_BOARDS.filter((b) => b.family === 'raspberry-pi-mcu'),
+      },
+      {
+        title: 'ESP32 — Standard DevKits',
+        subtitle: 'Leistungsstarke WLAN/BLE/Zigbee-Mikrocontroller für Arduino C++, ESPHome & WLED.',
+        items: ESP_BOARDS.filter((b) => b.family === 'esp32' && !b.isMini),
+      },
+      {
+        title: 'ESP32 — Mini-Boards',
+        subtitle: 'Ultra-kompakte Formfaktoren für Unterputz-Sensoren (z. B. LD2490), Wearables & winzige Gehäuse.',
+        items: ESP_BOARDS.filter((b) => b.family === 'esp32' && b.isMini),
+      },
+    ];
+
+    mount.innerHTML = groups
+      .map(
+        (g) => `
+        <section class="flex flex-col gap-2.5">
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wider eng-text-accent">${g.title}</h4>
+            <p class="text-[11.5px] eng-text-muted">${g.subtitle}</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            ${g.items
+              .map(
+                (b) => `
+              <div class="eng-card-soft rounded-xl border p-3.5 flex flex-col justify-between gap-2.5">
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="w-3 h-3 rounded-full shrink-0" style="background:${b.accentHex}"></span>
+                      <span class="text-xs font-bold eng-text-main leading-snug">${b.name}</span>
+                    </div>
+                    <span class="text-[9.5px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 ${
+                      b.family === 'raspberry-pi-sbc'
+                        ? 'bg-pink-500/15 text-pink-500 border-pink-500/40'
+                        : b.isMini
+                          ? 'bg-orange-500/15 text-orange-500 border-orange-500/40'
+                          : 'bg-cyan-500/15 eng-text-accent border-cyan-500/40'
+                    }">${b.family === 'raspberry-pi-sbc' ? 'LINUX SBC' : b.isMini ? 'MINI' : 'MCU'}</span>
+                  </div>
+                  <p class="text-[11px] eng-text-body leading-relaxed">${b.overview}</p>
+                  <div class="pt-1.5 border-t border-slate-500/20 flex flex-col gap-1 text-[10.5px]">
+                    <div class="flex justify-between gap-2"><span class="eng-text-muted">CPU</span><span class="font-mono eng-text-main text-right">${b.architecture}</span></div>
+                    <div class="flex justify-between gap-2"><span class="eng-text-muted">Funk</span><span class="font-mono eng-text-main text-right">${b.wireless}</span></div>
+                    <div class="flex justify-between gap-2"><span class="eng-text-muted">Speicher</span><span class="font-mono eng-text-main text-right">${b.flash}</span></div>
+                    <div class="flex justify-between gap-2"><span class="eng-text-muted">Spannung</span><span class="font-mono eng-text-main text-right">${b.voltageInfo}</span></div>
+                  </div>
+                  <div class="text-[10.5px] eng-text-muted pt-1">
+                    <span class="font-semibold eng-text-main">Ideal für:</span> ${b.idealFor}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-pick-board="${b.id}"
+                  class="w-full py-1.5 px-2.5 rounded-lg border border-cyan-500/50 bg-cyan-500/12 hover:bg-cyan-500/25 eng-text-accent text-xs font-semibold font-mono transition cursor-pointer"
+                >
+                  In 3D laden →
+                </button>
+              </div>
+            `,
+              )
+              .join('')}
+          </div>
+        </section>
+      `,
+      )
+      .join('');
+
+    mount.querySelectorAll<HTMLButtonElement>('[data-pick-board]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.pickBoard as EspBoardId;
+        this.selectBoard(id);
+        this.boardsModalEl.classList.add('hidden');
+        this.boardsModalEl.classList.remove('flex');
+      });
+    });
   }
 
   private updateHoverTooltip(info: HoverPartInfo | null, clientX: number, clientY: number): void {
@@ -497,6 +641,27 @@ class LearnEsp32App {
       this.applyTheme(this.theme === 'dark' ? 'light' : 'dark');
     });
 
+    this.roomDimBtnEl.addEventListener('click', () => {
+      this.roomDimmed = !this.roomDimmed;
+      this.sceneManager.setRoomDimmed(this.roomDimmed);
+      this.updateRoomDimToggleUi(this.roomDimmed);
+    });
+
+    this.root.querySelector('[data-action="open-boards"]')?.addEventListener('click', () => {
+      this.boardsModalEl.classList.remove('hidden');
+      this.boardsModalEl.classList.add('flex');
+    });
+    this.root.querySelector('[data-action="close-boards"]')?.addEventListener('click', () => {
+      this.boardsModalEl.classList.add('hidden');
+      this.boardsModalEl.classList.remove('flex');
+    });
+    this.boardsModalEl.addEventListener('click', (e) => {
+      if (e.target === this.boardsModalEl) {
+        this.boardsModalEl.classList.add('hidden');
+        this.boardsModalEl.classList.remove('flex');
+      }
+    });
+
     this.noBreadboardBtnEl.addEventListener('click', () => {
       const next = !this.params.withoutBreadboard;
       this.updateBreadboardToggleUi(next);
@@ -592,9 +757,18 @@ class LearnEsp32App {
   private selectLesson(id: CircuitTopologyId, isInitial: boolean): void {
     const lesson = getLessonById(id);
     this.solver.resetDynamicState();
+
+    // Auto-select a recommended Raspberry Pi board when entering a Raspberry Pi lesson from an ESP32
+    let nextBoardId = this.params.boardId;
+    if (lesson.recommendedBoardId && !this.params.boardId.startsWith('rpi-')) {
+      nextBoardId = lesson.recommendedBoardId;
+      this.boardSelectEl.value = nextBoardId;
+    }
+
     this.params = {
       ...this.params,
       ...lesson.defaultParams,
+      boardId: nextBoardId,
       topology: id,
       removedParts: [],
       buttonPressed: false,
@@ -638,6 +812,22 @@ class LearnEsp32App {
     const lesson = getLessonById(this.params.topology);
     this.controlsPanel.render(lesson, this.params);
     this.stepSimulation(true);
+  }
+
+  private updateRoomDimToggleUi(dimmed: boolean): void {
+    const icon = this.roomDimBtnEl.querySelector('[data-dim-icon]');
+    const label = this.roomDimBtnEl.querySelector('[data-dim-label]');
+    if (dimmed) {
+      this.roomDimBtnEl.className =
+        'px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-semibold whitespace-nowrap bg-indigo-500/22 border-indigo-400 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.35)]';
+      if (icon) icon.textContent = '🌙';
+      if (label) label.textContent = 'Raum abgedunkelt ✓';
+    } else {
+      this.roomDimBtnEl.className =
+        'eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap';
+      if (icon) icon.textContent = '💡';
+      if (label) label.textContent = 'Raum dunkel';
+    }
   }
 
   private updateBreadboardToggleUi(withoutBreadboard: boolean): void {

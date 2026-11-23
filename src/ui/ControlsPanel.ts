@@ -79,6 +79,9 @@ export class ControlsPanel {
       params.relayFlybackDiode,
       params.wledPowerInjection,
       params.wledPowerSource,
+      params.piTrafficAuto,
+      params.piFanAutoMode,
+      params.piOledPage,
       removedKey,
     ].join(':');
 
@@ -252,7 +255,7 @@ export class ControlsPanel {
         <!-- Lesson Header -->
         <div>
           <div class="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider eng-text-accent">
-            <span>Lektion ${lesson.number} / 16</span>
+            <span>Lektion ${lesson.number} / 19</span>
             <span class="opacity-50">•</span>
             <span class="eng-text-muted">${lesson.category}</span>
           </div>
@@ -710,6 +713,100 @@ export class ControlsPanel {
           }
         `;
       }
+
+      case 'pi-traffic-light': {
+        const phases: Array<{ id: CircuitParameters['piTrafficPhase']; label: string }> = [
+          { id: 'red', label: 'Rot' },
+          { id: 'red-yellow', label: 'Rot-Gelb' },
+          { id: 'green', label: 'Grün' },
+          { id: 'yellow', label: 'Gelb' },
+        ];
+        return `
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs eng-text-body">Automatik-Zyklus</span>
+            <button type="button" data-ctrl="pi-traffic-auto" class="px-3 py-1.5 rounded-lg font-mono text-xs font-semibold border cursor-pointer ${
+              params.piTrafficAuto ? 'bg-cyan-500/20 border-cyan-500 eng-text-accent' : 'eng-btn-neutral'
+            }">${params.piTrafficAuto ? 'AUTO-AMPEL EIN' : 'MANUELL'}</button>
+          </div>
+          ${
+            !params.piTrafficAuto
+              ? `<div class="grid grid-cols-2 gap-1.5">
+                  ${phases
+                    .map(
+                      (ph) =>
+                        `<button type="button" data-pi-phase="${ph.id}" class="py-1.5 px-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                          params.piTrafficPhase === ph.id
+                            ? 'bg-cyan-500/15 border-cyan-500 eng-text-accent'
+                            : 'eng-btn-neutral'
+                        }">${ph.label}</button>`,
+                    )
+                    .join('')}
+                </div>`
+              : ''
+          }
+        `;
+      }
+
+      case 'pi-fan-pwm': {
+        return `
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs eng-text-body">Temperatur-Automatik</span>
+            <button type="button" data-ctrl="pi-fan-auto" class="px-3 py-1.5 rounded-lg font-mono text-xs font-semibold border cursor-pointer ${
+              params.piFanAutoMode ? 'bg-cyan-500/20 border-cyan-500 eng-text-accent' : 'eng-btn-neutral'
+            }">${params.piFanAutoMode ? 'AUTO (TEMP-KURVE)' : 'MANUELL PWM'}</button>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1.5">
+              <span class="eng-text-body">Simulierte Pi CPU-Temperatur</span>
+              <span data-val="pi-temp" class="font-mono font-semibold text-amber-500 tabular-nums">${Math.round(params.piCpuTempC)} °C</span>
+            </div>
+            <input data-ctrl="pi-temp" type="range" min="35" max="85" value="${Math.round(params.piCpuTempC)}" class="eng-slider" />
+          </div>
+          ${
+            !params.piFanAutoMode
+              ? `<div>
+                  <div class="flex justify-between text-xs mb-1.5">
+                    <span class="eng-text-body">Manuelle Lüfter-Drehzahl</span>
+                    <span data-val="pi-fan-man" class="font-mono eng-text-accent tabular-nums">${Math.round(params.piFanManualPct)} %</span>
+                  </div>
+                  <input data-ctrl="pi-fan-man" type="range" min="0" max="100" value="${Math.round(params.piFanManualPct)}" class="eng-slider" />
+                </div>`
+              : ''
+          }
+        `;
+      }
+
+      case 'pi-oled-i2c': {
+        const pages: Array<{ id: CircuitParameters['piOledPage']; label: string }> = [
+          { id: 'system', label: 'System' },
+          { id: 'network', label: 'Netzwerk' },
+          { id: 'gpio', label: 'GPIO' },
+        ];
+        return `
+          <div>
+            <div class="text-xs eng-text-body mb-1.5">OLED Display-Seite</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              ${pages
+                .map(
+                  (pg) =>
+                    `<button type="button" data-oled-page="${pg.id}" class="py-1.5 px-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                      params.piOledPage === pg.id
+                        ? 'bg-cyan-500/15 border-cyan-500 eng-text-accent'
+                        : 'eng-btn-neutral'
+                    }">${pg.label}</button>`,
+                )
+                .join('')}
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1.5">
+              <span class="eng-text-body">OLED Kontrast / Leuchtkraft</span>
+              <span data-val="oled-contrast" class="font-mono eng-text-accent tabular-nums">${Math.round(params.piOledContrastPct)} %</span>
+            </div>
+            <input data-ctrl="oled-contrast" type="range" min="15" max="100" value="${Math.round(params.piOledContrastPct)}" class="eng-slider" />
+          </div>
+        `;
+      }
     }
   }
 
@@ -971,6 +1068,44 @@ export class ControlsPanel {
           this.callbacks.onTogglePartRemoved('power-injection'),
         );
         break;
+
+      case 'pi-traffic-light':
+        q('[data-ctrl="pi-traffic-auto"]')?.addEventListener('click', () =>
+          this.callbacks.onParamsChange({ piTrafficAuto: !params.piTrafficAuto }),
+        );
+        qAll<HTMLButtonElement>('[data-pi-phase]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({
+              piTrafficPhase: b.dataset.piPhase as CircuitParameters['piTrafficPhase'],
+            }),
+          ),
+        );
+        break;
+
+      case 'pi-fan-pwm':
+        q('[data-ctrl="pi-fan-auto"]')?.addEventListener('click', () =>
+          this.callbacks.onParamsChange({ piFanAutoMode: !params.piFanAutoMode }),
+        );
+        q<HTMLInputElement>('[data-ctrl="pi-temp"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ piCpuTempC: Number((e.target as HTMLInputElement).value) }),
+        );
+        q<HTMLInputElement>('[data-ctrl="pi-fan-man"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ piFanManualPct: Number((e.target as HTMLInputElement).value) }),
+        );
+        break;
+
+      case 'pi-oled-i2c':
+        qAll<HTMLButtonElement>('[data-oled-page]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({
+              piOledPage: b.dataset.oledPage as CircuitParameters['piOledPage'],
+            }),
+          ),
+        );
+        q<HTMLInputElement>('[data-ctrl="oled-contrast"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ piOledContrastPct: Number((e.target as HTMLInputElement).value) }),
+        );
+        break;
     }
   }
 
@@ -1156,6 +1291,24 @@ export class ControlsPanel {
         });
         break;
       }
+
+      case 'pi-traffic-light':
+        this.container.querySelectorAll<HTMLButtonElement>('[data-pi-phase]').forEach((b) => {
+          const active = b.dataset.piPhase === params.piTrafficPhase;
+          b.className = `py-1.5 px-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+            active ? 'bg-cyan-500/15 border-cyan-500 eng-text-accent' : 'eng-btn-neutral'
+          }`;
+        });
+        break;
+
+      case 'pi-fan-pwm':
+        setText('[data-val="pi-temp"]', `${Math.round(params.piCpuTempC)} °C`);
+        setText('[data-val="pi-fan-man"]', `${Math.round(params.piFanManualPct)} %`);
+        break;
+
+      case 'pi-oled-i2c':
+        setText('[data-val="oled-contrast"]', `${Math.round(params.piOledContrastPct)} %`);
+        break;
     }
   }
 }

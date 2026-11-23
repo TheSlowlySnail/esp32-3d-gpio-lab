@@ -29,6 +29,7 @@ import {
 } from './components/SpecialtyModules';
 import { LevelShifterMesh, WledStripMesh } from './components/WledStripMesh';
 import { MeanWellPowerMesh, WagoClampMesh } from './components/PowerAndWiringMeshes';
+import { CoolingFanMesh, OledDisplayMesh } from './components/PiPeripheralsMesh';
 
 export interface SceneCallbacks {
   onButtonPressChange?: (pressed: boolean) => void;
@@ -128,10 +129,13 @@ export class SceneManager {
 
   private hemiLight!: THREE.HemisphereLight;
   private keyLight!: THREE.DirectionalLight;
+  private rimLight!: THREE.DirectionalLight;
   private floorMat!: THREE.MeshStandardMaterial;
   private esdMat!: THREE.MeshStandardMaterial;
   private darkFloorTex!: THREE.CanvasTexture;
   private lightFloorTex!: THREE.CanvasTexture;
+  private currentTheme: ThemeMode = 'dark';
+  private roomDimmed = false;
 
   private readonly breadboard: BreadboardMesh;
   private esp32: Esp32Mesh;
@@ -155,6 +159,11 @@ export class SceneManager {
   private activeBuzzer: BuzzerMesh | null = null;
   private activeWledStrip: WledStripMesh | null = null;
   private activeMeanWell: MeanWellPowerMesh | null = null;
+  private activeTrafficRed: LedMesh | null = null;
+  private activeTrafficYellow: LedMesh | null = null;
+  private activeTrafficGreen: LedMesh | null = null;
+  private activeCoolingFan: CoolingFanMesh | null = null;
+  private activeOled: OledDisplayMesh | null = null;
 
   private targetServoDeg = 90;
   private currentLayoutKey = '';
@@ -288,9 +297,9 @@ export class SceneManager {
     this.keyLight.shadow.bias = -0.0005;
     this.scene.add(this.keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.56);
-    rimLight.position.set(-12, 9, -10);
-    this.scene.add(rimLight);
+    this.rimLight = new THREE.DirectionalLight(0x38bdf8, 0.56);
+    this.rimLight.position.set(-12, 9, -10);
+    this.scene.add(this.rimLight);
   }
 
   private setupWorkbench(): void {
@@ -319,7 +328,32 @@ export class SceneManager {
   }
 
   public setTheme(theme: ThemeMode): void {
-    if (theme === 'light') {
+    this.currentTheme = theme;
+    this.applyEnvironmentLighting();
+  }
+
+  public setRoomDimmed(dimmed: boolean): void {
+    this.roomDimmed = dimmed;
+    this.applyEnvironmentLighting();
+  }
+
+  private applyEnvironmentLighting(): void {
+    if (this.roomDimmed) {
+      // Darkened studio room so LEDs, WLED strips, traffic lights & OLED glow vividly!
+      this.scene.background = new THREE.Color('#02040a');
+      this.scene.fog = new THREE.FogExp2('#02040a', 0.018);
+      this.floorMat.map = this.darkFloorTex;
+      this.floorMat.needsUpdate = true;
+      this.esdMat.color.setHex(0x090d16);
+      this.hemiLight.intensity = 0.14;
+      this.hemiLight.groundColor.setHex(0x020617);
+      this.keyLight.intensity = 0.22;
+      this.rimLight.intensity = 0.12;
+      this.renderer.toneMappingExposure = 1.28;
+      return;
+    }
+
+    if (this.currentTheme === 'light') {
       this.scene.background = new THREE.Color('#e6edf6');
       this.scene.fog = new THREE.FogExp2('#e6edf6', 0.011);
       this.floorMat.map = this.lightFloorTex;
@@ -328,6 +362,7 @@ export class SceneManager {
       this.hemiLight.intensity = 1.05;
       this.hemiLight.groundColor.setHex(0xcbd5e1);
       this.keyLight.intensity = 1.35;
+      this.rimLight.intensity = 0.42;
       this.renderer.toneMappingExposure = 1.02;
     } else {
       this.scene.background = new THREE.Color('#0a101d');
@@ -338,6 +373,7 @@ export class SceneManager {
       this.hemiLight.intensity = 0.8;
       this.hemiLight.groundColor.setHex(0x0f172a);
       this.keyLight.intensity = 1.55;
+      this.rimLight.intensity = 0.56;
       this.renderer.toneMappingExposure = 1.12;
     }
   }
@@ -361,7 +397,7 @@ export class SceneManager {
     this.currentBoardId = boardId;
     const spec = getEspBoardById(boardId);
     this.esp32 = new Esp32Mesh(spec);
-    const xPos = spec.isMini ? -4.4 : -5.0;
+    const xPos = spec.family === 'raspberry-pi-sbc' && !spec.isMini ? -5.55 : spec.isMini ? -4.4 : -5.0;
     this.esp32.group.position.set(xPos, 0, 0);
     this.tagEspBoard();
     this.scene.add(this.esp32.group);
@@ -481,6 +517,17 @@ export class SceneManager {
           !params.removedParts.includes('meanwell-power'),
         );
         break;
+      case 'pi-traffic-light':
+        this.activeTrafficRed?.updateVisuals('red', result.piTrafficLeds.red ? 100 : 0, false, false, result.timestamp);
+        this.activeTrafficYellow?.updateVisuals('yellow', result.piTrafficLeds.yellow ? 100 : 0, false, false, result.timestamp);
+        this.activeTrafficGreen?.updateVisuals('green', result.piTrafficLeds.green ? 100 : 0, false, false, result.timestamp);
+        break;
+      case 'pi-fan-pwm':
+        this.activeCoolingFan?.setSpeed(result.piFanSpeedPct);
+        break;
+      case 'pi-oled-i2c':
+        this.activeOled?.updateScreen(result.piOledLines, params.piOledContrastPct);
+        break;
     }
   }
 
@@ -504,6 +551,11 @@ export class SceneManager {
     this.activeBuzzer = null;
     this.activeWledStrip = null;
     this.activeMeanWell = null;
+    this.activeTrafficRed = null;
+    this.activeTrafficYellow = null;
+    this.activeTrafficGreen = null;
+    this.activeCoolingFan = null;
+    this.activeOled = null;
   }
 
   private addWire(
@@ -1321,6 +1373,143 @@ export class SceneManager {
         }
         break;
       }
+
+      case 'pi-traffic-light': {
+        // 3 separate GPIO lines -> 3x 220 Ohm resistors -> Red, Yellow, Green LEDs
+        this.addWire(rolePin('outA'), hole(7, 'f'), 0xef4444, 1.85, 0.15);
+        this.addWire(rolePin('outB'), hole(14, 'f'), 0xfacc15, 2.05, 0.45);
+        this.addWire(rolePin('outC'), hole(21, 'f'), 0x22c55e, 2.25, 0.75);
+
+        this.registerPart(new ResistorMesh(hole(7, 'h'), hole(11, 'h'), 220).group, {
+          partId: 'r-red',
+          name: 'Vorwiderstand Ampel Rot (220 Ω)',
+          categoryLabel: 'Ampel-Kanal',
+          description: 'Begrenzt den Strom der roten Ampel-LED (~5,9 mA). Klicken deaktiviert die Rot-Phase.',
+          specLine: 'Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('r-red'),
+        });
+        this.registerPart(new ResistorMesh(hole(14, 'h'), hole(18, 'h'), 220).group, {
+          partId: 'r-yellow',
+          name: 'Vorwiderstand Ampel Gelb (220 Ω)',
+          categoryLabel: 'Ampel-Kanal',
+          description: 'Begrenzt den Strom der gelben Ampel-LED (~5,5 mA). Klicken deaktiviert die Gelb-Phase.',
+          specLine: 'Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('r-yellow'),
+        });
+        this.registerPart(new ResistorMesh(hole(21, 'h'), hole(25, 'h'), 220).group, {
+          partId: 'r-green',
+          name: 'Vorwiderstand Ampel Grün (220 Ω)',
+          categoryLabel: 'Ampel-Kanal',
+          description: 'Begrenzt den Strom der grünen Ampel-LED (~5,0 mA). Klicken deaktiviert die Grün-Phase.',
+          specLine: 'Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('r-green'),
+        });
+
+        this.activeTrafficRed = new LedMesh(hole(11, 'g'), hole(13, 'g'));
+        this.registerPart(this.activeTrafficRed.group, {
+          partId: 'led-red',
+          name: 'Ampel-LED Rot',
+          categoryLabel: 'Raspberry Pi Ausgang',
+          description: 'Halt-Signal gesteuert durch den ersten Pi-GPIO-Ausgang.',
+          specLine: 'Vf = 2,0 V · ~5,9 mA',
+          removable: false,
+          isRemoved: false,
+        });
+
+        this.activeTrafficYellow = new LedMesh(hole(18, 'g'), hole(20, 'g'));
+        this.registerPart(this.activeTrafficYellow.group, {
+          partId: 'led-yellow',
+          name: 'Ampel-LED Gelb',
+          categoryLabel: 'Raspberry Pi Ausgang',
+          description: 'Übergangs-Signal gesteuert durch den zweiten Pi-GPIO-Ausgang.',
+          specLine: 'Vf = 2,1 V · ~5,5 mA',
+          removable: false,
+          isRemoved: false,
+        });
+
+        this.activeTrafficGreen = new LedMesh(hole(25, 'g'), hole(27, 'g'));
+        this.registerPart(this.activeTrafficGreen.group, {
+          partId: 'led-green',
+          name: 'Ampel-LED Grün',
+          categoryLabel: 'Raspberry Pi Ausgang',
+          description: 'Fahrt-Signal gesteuert durch den dritten Pi-GPIO-Ausgang.',
+          specLine: 'Vf = 2,2 V · ~5,0 mA',
+          removable: false,
+          isRemoved: false,
+        });
+
+        this.addWire(hole(13, 'j'), hole(13, '-top'), 0x1e293b, 0.8, 0);
+        this.addWire(hole(20, 'j'), hole(20, '-top'), 0x1e293b, 0.8, 0);
+        this.addWire(hole(27, 'j'), hole(27, '-top'), 0x1e293b, 0.8, 0);
+        break;
+      }
+
+      case 'pi-fan-pwm': {
+        this.addWire(rolePin('outA'), hole(10, 'f'), 0x38bdf8, 1.95, 0.25);
+        this.dynamicCircuitGroup.add(new ResistorMesh(hole(10, 'h'), hole(10, '-top'), 10000).group);
+
+        const mosfet = new MosfetMesh([hole(10, 'g'), hole(12, 'g'), hole(14, 'g')]);
+        this.registerPart(mosfet.group, {
+          partId: 'fan-mosfet',
+          name: 'N-Kanal MOSFET Lüfter-Treiber',
+          categoryLabel: 'Leistungsschalter',
+          description: 'Schaltet den 5-V-Lüfterstrom (~200 mA) per 3,3-V-PWM vom Raspberry Pi ohne den GPIO zu überlasten.',
+          specLine: 'Klicken zum Entfernen → Kühlung fällt aus!',
+          removable: true,
+          isRemoved: isRem('fan-mosfet'),
+        });
+        this.addWire(hole(14, 'j'), hole(14, '-top'), 0x1e293b, 0.85, 0);
+
+        const fanPos = hole(22, 'f').lerp(hole(22, 'e'), 0.5);
+        this.activeCoolingFan = new CoolingFanMesh(fanPos);
+        this.registerPart(this.activeCoolingFan.group, {
+          partId: 'pi-fan',
+          name: '5V Axiallüfter (40 mm, PWM-geregelt)',
+          categoryLabel: 'Aktive Kühlung',
+          description: 'Temperaturgeregelter 5-V-Kühllüfter für Raspberry Pi SoCs. Drehzahl folgt live der CPU-Temperatur-Kurve.',
+          specLine: '5 V DC · bis ~210 mA · Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('pi-fan'),
+        });
+        this.addWire(hole(12, 'e'), hole(20, 'e'), 0xf59e0b, 1.1, 0.15);
+        this.addWire(hole(22, 'j'), hole(22, '+top'), 0xef4444, 0.9, 0);
+        break;
+      }
+
+      case 'pi-oled-i2c': {
+        this.activeOled = new OledDisplayMesh([
+          hole(14, 'f'),
+          hole(15, 'f'),
+          hole(16, 'f'),
+          hole(17, 'f'),
+        ]);
+        this.registerPart(this.activeOled.group, {
+          partId: 'oled-display',
+          name: '0,96" SSD1306 I²C OLED-Display (128×64)',
+          categoryLabel: 'I²C Display',
+          description: 'Selbstleuchtendes Zweifarben-OLED (Gelb + Cyan) an I²C-Adresse 0x3C. Zeigt live System-, Netzwerk- oder GPIO-Daten des Raspberry Pi.',
+          specLine: 'I²C 0x3C · 3,3 V · Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('oled-display'),
+        });
+
+        this.addWire(hole(14, 'j'), hole(14, '-top'), 0x1e293b, 0.85, 0);
+        this.addWire(hole(15, 'j'), hole(15, '+top'), 0xef4444, 0.85, 0);
+        this.addWire(rolePin('scl'), hole(16, 'i'), 0xfacc15, 1.55, -0.45);
+        this.addWire(rolePin('sda'), hole(17, 'h'), 0x38bdf8, 1.75, -0.75, {
+          partId: 'i2c-sda',
+          name: 'I²C SDA-Datenleitung',
+          categoryLabel: 'I²C Bus',
+          description: 'Überträgt die 128×64-Pixel-Framebuffer-Daten vom Raspberry Pi zum SSD1306-OLED.',
+          specLine: 'Klicken zum Entfernen → Display geht aus!',
+          removable: true,
+          isRemoved: isRem('i2c-sda'),
+        });
+        break;
+      }
     }
   }
 
@@ -1437,6 +1626,7 @@ export class SceneManager {
 
       this.activeButton?.update(dt);
       this.activeServo?.setAngle(this.targetServoDeg, dt);
+      this.activeCoolingFan?.update(dt);
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
     };

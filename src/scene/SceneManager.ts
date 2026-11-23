@@ -3,12 +3,21 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getEspBoardById } from '../engine/BoardCatalog';
 import { formatResistance } from '../engine/ComponentRegistry';
 import type {
+  BoardPinAssignment,
   CircuitParameters,
   EspBoardId,
   HoverPartInfo,
   SimulationResult,
   ThemeMode,
 } from '../engine/types';
+import { formatEndpointLabel, getCatalogItem } from '../sandbox/SandboxEngine';
+import type {
+  HighlightMarker,
+  SandboxSimSummary,
+  SandboxState,
+  SandboxToolId,
+  WireEndpoint,
+} from '../sandbox/SandboxTypes';
 import { BreadboardMesh } from './components/BreadboardMesh';
 import { ButtonMesh } from './components/ButtonMesh';
 import { Esp32Mesh } from './components/Esp32Mesh';
@@ -35,6 +44,8 @@ export interface SceneCallbacks {
   onButtonPressChange?: (pressed: boolean) => void;
   onHoverPartChange?: (info: HoverPartInfo | null, clientX: number, clientY: number) => void;
   onTogglePartRemoved?: (partId: string) => void;
+  onSandboxEndpointClick?: (endpoint: WireEndpoint) => void;
+  onSandboxDeleteItem?: (kind: 'part' | 'wire', id: string) => void;
 }
 
 function createWorkbenchTexture(theme: ThemeMode): THREE.CanvasTexture {
@@ -165,6 +176,30 @@ export class SceneManager {
   private activeCoolingFan: CoolingFanMesh | null = null;
   private activeOled: OledDisplayMesh | null = null;
 
+  // Sandbox & Guided Builder state
+  private sandboxModeActive = false;
+  private sandboxTool: SandboxToolId = 'place';
+  private readonly markerGroup = new THREE.Group();
+  private readonly boardPinPadsGroup = new THREE.Group();
+  private readonly hoverSnapRing: THREE.Mesh;
+  private readonly sandboxPartHandles = new Map<
+    string,
+    {
+      type: string;
+      led?: LedMesh;
+      button?: ButtonMesh;
+      ldr?: LdrMesh;
+      bme280?: Bme280Mesh;
+      hcsr04?: UltrasonicMesh;
+      ld2490?: Ld2490Mesh;
+      oled?: OledDisplayMesh;
+      servo?: ServoMesh;
+      buzzer?: BuzzerMesh;
+    }
+  >();
+  private lastMarkerKey = '';
+  private lastSandboxElapsed = 0;
+
   private targetServoDeg = 90;
   private currentLayoutKey = '';
 
@@ -249,6 +284,25 @@ export class SceneManager {
 
     this.dynamicCircuitGroup.name = 'Dynamic_Circuit';
     this.scene.add(this.dynamicCircuitGroup);
+
+    this.markerGroup.name = 'Guided_Markers';
+    this.scene.add(this.markerGroup);
+
+    this.boardPinPadsGroup.name = 'Sandbox_Board_Pins';
+    this.scene.add(this.boardPinPadsGroup);
+
+    this.hoverSnapRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.11, 0.17, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9,
+      }),
+    );
+    this.hoverSnapRing.rotation.x = -Math.PI / 2;
+    this.hoverSnapRing.visible = false;
+    this.scene.add(this.hoverSnapRing);
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -405,6 +459,11 @@ export class SceneManager {
   }
 
   public syncSimulation(params: CircuitParameters, result: SimulationResult): void {
+    this.sandboxModeActive = false;
+    this.boardPinPadsGroup.visible = false;
+    this.markerGroup.visible = false;
+    this.hoverSnapRing.visible = false;
+
     const boardChanged = this.swapEspBoardIfNeeded(params.boardId);
     const removedKey = [...params.removedParts].sort().join(',');
     const wledBucket = params.topology === 'wled-compact' ? Math.round(params.wledLedCount / 6) : 0;
@@ -1513,6 +1572,388 @@ export class SceneManager {
     }
   }
 
+  public setSandboxTool(tool: SandboxToolId): void {
+    this.sandboxTool = tool;
+  }
+
+  private resolveEndpointWorld(ep: WireEndpoint): THREE.Vector3 {
+    if (ep.kind === 'board') {
+      const role = ep.boardPinRole ?? '3V3';
+      if (role === '3V3' || role === 'GND') {
+        return this.esp32.getWorldPinPosition(role);
+      }
+      return this.esp32.getWorldRolePin(role as keyof BoardPinAssignment);
+    }
+    return this.breadboard.getWorldHolePosition(ep.col ?? 1, ep.row ?? 'g');
+  }
+
+  private rebuildBoardPinPads(): void {
+    while (this.boardPinPadsGroup.children.length > 0) {
+      this.boardPinPadsGroup.remove(this.boardPinPadsGroup.children[0]);
+    }
+
+    const roles: Array<{ role: string; color: number }> = [
+      { role: '3V3', color: 0xef4444 },
+      { role: 'GND', color: 0x64748b },
+      { role: 'outA', color: 0x38bdf8 },
+      { role: 'outB', color: 0xa855f7 },
+      { role: 'outC', color: 0x22c55e },
+      { role: 'inputA', color: 0x0ea5e9 },
+      { role: 'adc', color: 0xf59e0b },
+      { role: 'sda', color: 0x06b6d4 },
+      { role: 'scl', color: 0xfacc15 },
+      { role: 'uartTx', color: 0xfb923c },
+      { role: 'uartRx', color: 0x34d399 },
+    ];
+
+    const sphereGeo = new THREE.SphereGeometry(0.115, 14, 14);
+    for (const item of roles) {
+      const ep: WireEndpoint = { kind: 'board', boardPinRole: item.role };
+      const pos = this.resolveEndpointWorld(ep);
+      const mat = new THREE.MeshStandardMaterial({
+        color: item.color,
+        emissive: item.color,
+        emissiveIntensity: 0.75,
+        roughness: 0.25,
+      });
+      const dot = new THREE.Mesh(sphereGeo, mat);
+      dot.position.copy(pos).add(new THREE.Vector3(0, 0.08, 0));
+      dot.userData.sandboxEndpoint = ep;
+      dot.userData.hoverInfo = {
+        partId: `pin-${item.role}`,
+        name: formatEndpointLabel(ep, this.currentBoardId),
+        categoryLabel: 'Board-Anschluss',
+        description: 'Klicke diesen leuchtenden Pin im Jumperkabel-Modus an, um eine Leitung zum Steckbrett zu ziehen!',
+        specLine: `Pin-Rolle: ${item.role}`,
+        removable: false,
+        isRemoved: false,
+      } satisfies HoverPartInfo;
+      this.boardPinPadsGroup.add(dot);
+    }
+  }
+
+  /**
+   * Synchronisiert die 3D-Szene im freien Werkbank- (Sandbox) oder Geführten Bau-Modus.
+   */
+  public syncSandbox(
+    boardId: EspBoardId,
+    state: SandboxState,
+    summary: SandboxSimSummary,
+    highlights: HighlightMarker[],
+    wireStart: WireEndpoint | null,
+    elapsedSeconds: number,
+  ): void {
+    this.sandboxModeActive = true;
+    this.lastSandboxElapsed = elapsedSeconds;
+    this.breadboard.group.visible = true;
+    this.boardPinPadsGroup.visible = true;
+    this.markerGroup.visible = true;
+
+    const boardChanged = this.swapEspBoardIfNeeded(boardId);
+    if (boardChanged || this.boardPinPadsGroup.children.length === 0) {
+      this.rebuildBoardPinPads();
+    }
+
+    const partsKey = state.parts.map((p) => `${p.id}:${p.type}:${p.col}:${p.row}`).join('|');
+    const wiresKey = state.wires
+      .map(
+        (w) =>
+          `${w.id}:${w.colorHex}:${w.from.kind}:${w.from.boardPinRole ?? ''}:${w.from.col ?? ''}:${w.from.row ?? ''}:${w.to.kind}:${w.to.boardPinRole ?? ''}:${w.to.col ?? ''}:${w.to.row ?? ''}`,
+      )
+      .join('|');
+    const layoutKey = `sandbox:${boardId}:${partsKey}::${wiresKey}`;
+
+    if (boardChanged || layoutKey !== this.currentLayoutKey) {
+      this.rebuildSandboxScene(state);
+      this.currentLayoutKey = layoutKey;
+    }
+
+    // Update live visuals of all user-placed components
+    this.esp32.setStatusLed(summary.activePartsCount > 0);
+    for (const part of state.parts) {
+      const handle = this.sandboxPartHandles.get(part.id);
+      const runtime = summary.partStates.get(part.id);
+      if (!handle || !runtime) continue;
+
+      if (handle.led) {
+        const colId =
+          part.type === 'led-green' ? 'green' : part.type === 'led-blue' ? 'blue' : 'red';
+        handle.led.updateVisuals(
+          colId,
+          runtime.brightnessPct,
+          runtime.overcurrent,
+          runtime.overcurrent,
+          elapsedSeconds,
+        );
+      }
+      if (handle.button) {
+        handle.button.setPressed(state.buttonPressed);
+      }
+      if (handle.ldr) {
+        handle.ldr.setLightLevel(state.lightPercent);
+      }
+      if (handle.bme280) {
+        handle.bme280.setActive(runtime.active);
+      }
+      if (handle.hcsr04 && runtime.powered) {
+        handle.hcsr04.updateWave(65, elapsedSeconds);
+      }
+      if (handle.ld2490) {
+        handle.ld2490.updateVisuals(
+          runtime.active,
+          runtime.powered && state.radarPresent,
+          2.0,
+          true,
+          elapsedSeconds,
+        );
+      }
+      if (handle.oled) {
+        handle.oled.updateScreen(
+          runtime.active
+            ? [
+                this.esp32.spec.shortName.toUpperCase(),
+                'SANDBOX OLED OK',
+                `ACTIVE PARTS: ${summary.activePartsCount}`,
+                `I = ${summary.totalCurrentMa.toFixed(1)} mA`,
+              ]
+            : [],
+          90,
+        );
+      }
+      if (handle.servo && runtime.active) {
+        this.targetServoDeg = state.servoAngleDeg;
+      }
+      if (handle.buzzer) {
+        handle.buzzer.updateSound(runtime.active, 880, elapsedSeconds);
+      }
+    }
+
+    // Update pulsing target markers (Guided Builder + active wire start point)
+    const allMarkers: HighlightMarker[] = [...highlights];
+    if (wireStart) {
+      allMarkers.push({ endpoint: wireStart, colorHex: '#facc15', label: 'Start' });
+    }
+    const markerKey = allMarkers
+      .map(
+        (m) =>
+          `${m.colorHex}:${m.endpoint.kind}:${m.endpoint.boardPinRole ?? ''}:${m.endpoint.col ?? ''}:${m.endpoint.row ?? ''}`,
+      )
+      .join('|');
+    if (markerKey !== this.lastMarkerKey) {
+      this.rebuildMarkers(allMarkers);
+      this.lastMarkerKey = markerKey;
+    }
+  }
+
+  private rebuildMarkers(markers: HighlightMarker[]): void {
+    while (this.markerGroup.children.length > 0) {
+      this.markerGroup.remove(this.markerGroup.children[0]);
+    }
+    for (const m of markers) {
+      const pos = this.resolveEndpointWorld(m.endpoint);
+      const col = new THREE.Color(m.colorHex);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.16, 0.27, 28),
+        new THREE.MeshBasicMaterial({
+          color: col,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.92,
+        }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(pos.x, pos.y + 0.08, pos.z);
+      ring.userData.pulseBaseY = pos.y + 0.08;
+      this.markerGroup.add(ring);
+
+      const beacon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 0.72, 10),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5 }),
+      );
+      beacon.position.set(pos.x, pos.y + 0.44, pos.z);
+      this.markerGroup.add(beacon);
+    }
+  }
+
+  private rebuildSandboxScene(state: SandboxState): void {
+    this.clearDynamicCircuit();
+    this.sandboxPartHandles.clear();
+    const hole = (col: number, row: string) =>
+      this.breadboard.getWorldHolePosition(Math.max(1, Math.min(30, col)), row);
+
+    for (const part of state.parts) {
+      const def = getCatalogItem(part.type);
+      const pins = def.pinOffsets.map((po) => hole(part.col + po.dCol, po.row));
+      let group: THREE.Group | null = null;
+      const handle: NonNullable<ReturnType<typeof this.sandboxPartHandles.get>> = {
+        type: part.type,
+      };
+
+      switch (part.type) {
+        case 'led-red':
+        case 'led-green':
+        case 'led-blue': {
+          const led = new LedMesh(pins[0], pins[1]);
+          handle.led = led;
+          group = led.group;
+          break;
+        }
+        case 'resistor-220':
+        case 'resistor-10k': {
+          const r = new ResistorMesh(pins[0], pins[1], part.type === 'resistor-220' ? 220 : 10000);
+          group = r.group;
+          break;
+        }
+        case 'button': {
+          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
+          const btn = new ButtonMesh(center);
+          handle.button = btn;
+          this.activeButton = btn;
+          group = btn.group;
+          break;
+        }
+        case 'capacitor': {
+          const cap = new CapacitorMesh(pins[0], pins[1]);
+          group = cap.group;
+          break;
+        }
+        case 'ldr': {
+          const ldr = new LdrMesh(pins[0], pins[1]);
+          handle.ldr = ldr;
+          group = ldr.group;
+          break;
+        }
+        case 'bme280': {
+          const bme = new Bme280Mesh(pins);
+          handle.bme280 = bme;
+          group = bme.group;
+          break;
+        }
+        case 'hcsr04': {
+          const us = new UltrasonicMesh(pins);
+          handle.hcsr04 = us;
+          group = us.group;
+          break;
+        }
+        case 'ld2490': {
+          const ld = new Ld2490Mesh(pins);
+          handle.ld2490 = ld;
+          group = ld.group;
+          break;
+        }
+        case 'oled': {
+          const oled = new OledDisplayMesh(pins);
+          handle.oled = oled;
+          group = oled.group;
+          break;
+        }
+        case 'servo': {
+          const center = hole(part.col + 1, 'f').lerp(hole(part.col + 1, 'e'), 0.5);
+          const srv = new ServoMesh(center);
+          handle.servo = srv;
+          this.activeServo = srv;
+          group = srv.group;
+          break;
+        }
+        case 'buzzer': {
+          const bz = new BuzzerMesh(pins[0], pins[1]);
+          handle.buzzer = bz;
+          group = bz.group;
+          break;
+        }
+      }
+
+      if (group) {
+        const hoverInfo: HoverPartInfo = {
+          partId: part.id,
+          name: `${def.name} (Spalte ${part.col})`,
+          categoryLabel: def.category,
+          description: def.description,
+          specLine: `Pins: ${def.pinOffsets.map((po) => `${part.col + po.dCol}${po.row} (${po.pinLabel})`).join(' · ')}`,
+          removable: false,
+          isRemoved: false,
+        };
+        tagHoverable(group, hoverInfo);
+        group.traverse((c) => {
+          c.userData.sandboxItem = { kind: 'part', id: part.id };
+        });
+        this.dynamicCircuitGroup.add(group);
+        this.sandboxPartHandles.set(part.id, handle);
+      }
+    }
+
+    // Build all user-placed jumper wires
+    state.wires.forEach((w, idx) => {
+      const start = this.resolveEndpointWorld(w.from);
+      const end = this.resolveEndpointWorld(w.to);
+      const isBoardWire = w.from.kind === 'board' || w.to.kind === 'board';
+      const wireColor = new THREE.Color(w.colorHex).getHex();
+      const wire = new JumperWireMesh({
+        start,
+        end,
+        color: wireColor,
+        arcHeight: isBoardWire ? 1.85 + (idx % 3) * 0.2 : 0.95,
+        lateralOffset: isBoardWire ? ((idx % 5) - 2) * 0.22 : 0,
+      });
+      const info: HoverPartInfo = {
+        partId: w.id,
+        name: `Jumperkabel (${formatEndpointLabel(w.from, this.currentBoardId)} ↔ ${formatEndpointLabel(w.to, this.currentBoardId)})`,
+        categoryLabel: 'Jumperkabel',
+        description: 'Frei verlegtes 3D-Jumperkabel in deiner eigenen Schaltung.',
+        specLine: 'Mit Löschen-Werkzeug anklicken zum Entfernen',
+        removable: false,
+        isRemoved: false,
+      };
+      tagHoverable(wire.group, info);
+      wire.group.traverse((c) => {
+        c.userData.sandboxItem = { kind: 'wire', id: w.id };
+      });
+      this.dynamicCircuitGroup.add(wire.group);
+    });
+  }
+
+  private pickSandboxEndpoint(clientX: number, clientY: number): WireEndpoint | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    this.pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+
+    // 1. Check board pin dots first (easy picking for ESP/Pi pins)
+    const pinHits = this.raycaster.intersectObject(this.boardPinPadsGroup, true);
+    if (pinHits.length > 0 && pinHits[0].object.userData.sandboxEndpoint) {
+      return pinHits[0].object.userData.sandboxEndpoint as WireEndpoint;
+    }
+
+    // 2. Check breadboard surface -> snap to nearest hole
+    const bbHits = this.raycaster.intersectObject(this.breadboard.group, true);
+    if (bbHits.length > 0) {
+      const nearest = this.breadboard.findNearestHole(bbHits[0].point);
+      return { kind: 'breadboard', col: nearest.col, row: nearest.row };
+    }
+    return null;
+  }
+
+  private pickSandboxDeleteItem(
+    clientX: number,
+    clientY: number,
+  ): { kind: 'part' | 'wire'; id: string } | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    this.pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+
+    const hits = this.raycaster.intersectObject(this.dynamicCircuitGroup, true);
+    for (const h of hits) {
+      const item = h.object.userData.sandboxItem as { kind: 'part' | 'wire'; id: string } | undefined;
+      if (item) return item;
+    }
+    return null;
+  }
+
   private getHoverTarget(clientX: number, clientY: number): HoverPartInfo | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
@@ -1523,7 +1964,9 @@ export class SceneManager {
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
     // Prioritize dynamic components & ESP board before the underlying breadboard
-    const targets = [this.dynamicCircuitGroup, this.esp32.group, this.breadboard.group];
+    const targets = this.sandboxModeActive
+      ? [this.boardPinPadsGroup, this.dynamicCircuitGroup, this.esp32.group, this.breadboard.group]
+      : [this.dynamicCircuitGroup, this.esp32.group, this.breadboard.group];
     for (const root of targets) {
       if (!root.visible) continue;
       const hits = this.raycaster.intersectObject(root, true);
@@ -1552,11 +1995,30 @@ export class SceneManager {
     const hitBtn = this.hitTestButton(e.clientX, e.clientY);
     this.activeButton?.setHovered(hitBtn);
 
+    if (this.sandboxModeActive && this.sandboxTool !== 'delete') {
+      const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
+      if (ep && (this.sandboxTool === 'wire' || ep.kind === 'breadboard')) {
+        const pos = this.resolveEndpointWorld(ep);
+        this.hoverSnapRing.position.set(pos.x, pos.y + 0.05, pos.z);
+        this.hoverSnapRing.visible = true;
+      } else {
+        this.hoverSnapRing.visible = false;
+      }
+    } else {
+      this.hoverSnapRing.visible = false;
+    }
+
     const hoverInfo = this.getHoverTarget(e.clientX, e.clientY);
     this.callbacks.onHoverPartChange?.(hoverInfo, e.clientX, e.clientY);
 
-    if (hitBtn || this.isPointerHoldingButton || hoverInfo?.removable) {
-      this.renderer.domElement.style.cursor = 'pointer';
+    if (
+      hitBtn ||
+      this.isPointerHoldingButton ||
+      hoverInfo?.removable ||
+      this.sandboxModeActive
+    ) {
+      this.renderer.domElement.style.cursor =
+        this.sandboxModeActive && this.sandboxTool === 'delete' ? 'crosshair' : 'pointer';
     } else {
       this.renderer.domElement.style.cursor = 'grab';
     }
@@ -1587,11 +2049,21 @@ export class SceneManager {
       return;
     }
 
-    // Short click (< 5px drag) on a removable 3D component toggles it removed/installed!
+    // Short click (< 5px drag)
     if (this.pointerDownPos) {
       const dist = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
       this.pointerDownPos = null;
       if (dist < 5) {
+        if (this.sandboxModeActive) {
+          if (this.sandboxTool === 'delete') {
+            const target = this.pickSandboxDeleteItem(e.clientX, e.clientY);
+            if (target) this.callbacks.onSandboxDeleteItem?.(target.kind, target.id);
+          } else {
+            const ep = this.pickSandboxEndpoint(e.clientX, e.clientY);
+            if (ep) this.callbacks.onSandboxEndpointClick?.(ep);
+          }
+          return;
+        }
         const hoverInfo = this.getHoverTarget(e.clientX, e.clientY);
         if (hoverInfo?.removable) {
           this.callbacks.onTogglePartRemoved?.(hoverInfo.partId);
@@ -1627,6 +2099,14 @@ export class SceneManager {
       this.activeButton?.update(dt);
       this.activeServo?.setAngle(this.targetServoDeg, dt);
       this.activeCoolingFan?.update(dt);
+      if (this.sandboxModeActive && this.markerGroup.children.length > 0) {
+        const pulse = 1.0 + Math.sin(this.lastSandboxElapsed * 6.5) * 0.22;
+        for (const ch of this.markerGroup.children) {
+          if (ch.userData.pulseBaseY !== undefined) {
+            ch.scale.set(pulse, pulse, 1);
+          }
+        }
+      }
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
     };

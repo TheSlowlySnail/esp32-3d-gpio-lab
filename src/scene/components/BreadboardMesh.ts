@@ -285,4 +285,28 @@ export class BreadboardMesh {
     this.group.updateMatrixWorld(true);
     return local.applyMatrix4(this.group.matrixWorld);
   }
+
+  /**
+   * Findet zu einem 3D-Weltpunkt auf der Breadboard-Oberfläche das nächstgelegene Steckloch.
+   */
+  public findNearestHole(worldPoint: THREE.Vector3): { col: number; row: string } {
+    this.group.updateMatrixWorld(true);
+    const inv = this.group.matrixWorld.clone().invert();
+    const local = worldPoint.clone().applyMatrix4(inv);
+
+    const centerCol = (this.spec.cols + 1) / 2;
+    const rawCol = Math.round(local.x / this.spec.pitch + centerCol);
+    const col = Math.max(1, Math.min(this.spec.cols, rawCol));
+
+    let bestRow = 'g';
+    let bestDist = Infinity;
+    for (const [rowKey, rz] of Object.entries(BOARD_ROWS)) {
+      const d = Math.abs(local.z - rz);
+      if (d < bestDist) {
+        bestDist = d;
+        bestRow = rowKey;
+      }
+    }
+    return { col, row: bestRow };
+  }
 }

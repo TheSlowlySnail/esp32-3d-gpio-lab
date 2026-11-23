@@ -8,6 +8,10 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ## Highlights & Features
 
+- **3 interaktive Arbeitsbereiche (Navigationsleiste):**
+  - **📚 Lektionen (19):** 19 fertige Schaltungen von LED & Taster bis WLED & Raspberry Pi.
+  - **🔧 Freie Werkbank (Sandbox-Baukasten):** Eigene Schaltungen direkt auf dem 3D-Steckbrett aufbauen — mit einem **14-teiligen Bauteil- & Sensor-Set** (Rote/Grüne/Blaue LED, 220 Ω & 10 kΩ Widerstände, Taster, 100 µF Elko, LDR Lichtsensor, BME280 I²C, HC-SR04 Ultraschall, HLK-LD2490 24 GHz Radar, SSD1306 I²C OLED, SG90 Servo, Piezo-Buzzer) sowie **6-farbigen 3D-Jumperkabeln**, echter Breadboard-Netzlisten-Simulation (inkl. Überstrom-Erkennung ohne Vorwiderstand), `Demo laden` und Live-Testschaltern.
+  - **🧭 Bau mit mir! (Geführter Bau-Assistent):** Nimmt Einsteiger Schritt für Schritt an die Hand — mit **3 kompletten Projekten** (*Deine erste eigene LED-Schaltung*, *Taster schaltet grüne LED*, *Smart-Home: LD2490 Radar + I²C OLED*), pulsierenden 3D-Zielmarkierungen an exakt den richtigen Pins/Löchern, automatischer Schritt-Erkennung, *Warum?*-Erklärung und Ein-Klick-Assistent (`✨ Diesen Schritt für mich stecken`).
 - **Interaktive 3D-Szene (Three.js + OrbitControls):**
   - Maßstabsgetreue 3D-Bauteile mit weichen Schatten, Live-LED-Glow (`emissiveIntensity`, additiver Halo, `PointLight`), automatisch aktualisierten 4-Band-Widerstandsfarbringen (IEC 60062), klickbarem 3D-Taster, drehendem SG90-Servo-Arm, 24-GHz-HLK-LD2490-Radarwellen, Mean Well 5V-Netzteil/Akku-Pack, flexiblen WS2812B-WLED-Streifen, rotierendem 5-V-Axiallüfter und selbstleuchtendem 0,96"-SSD1306-OLED-Display.
   - **10 wählbare Mikrocomputer & Mikrocontroller (inkl. eigener Vergleichs-Rubrik „Boards (10)“):**
@@ -93,20 +97,25 @@ npm run preview     # Lokale Vorschau des Production-Builds
 ```text
 src/
 ├── engine/              # Reine Simulations-Logik (0 % Three.js)
-│   ├── BoardCatalog.ts      # 6 ESP-Modelle inkl. Pin-Mappings & ESPHome-Targets
+│   ├── BoardCatalog.ts      # 10 Boards (6 ESP32 + 4 Raspberry Pi) inkl. Pin-Mappings
 │   ├── CircuitSolver.ts     # Physik-Engine, Fehler-Simulation & Live-Erklärungen
 │   ├── ComponentRegistry.ts # Erweiterbare Bauteil-Bibliothek & Farbcode-Berechnung
 │   └── types.ts             # Zentrale TypeScript-Interfaces
+├── sandbox/             # Werkbank-Netzlisten-Engine & Geführte Projekte (0 % Three.js)
+│   ├── SandboxTypes.ts      # Typen für 14 Bauteile, Jumperkabel & 3D-Zielmarkierungen
+│   ├── SandboxEngine.ts     # Echte Breadboard-Union-Find-Simulation & 14-Teile-Katalog
+│   └── GuidedProjects.ts    # 3 Schritt-für-Schritt-Bauprojekte mit Live-Prüfung
 ├── lessons/
-│   └── lessons.ts           # 16 strukturierte Lektionen inkl. Formeln & Challenges
+│   └── lessons.ts           # 19 strukturierte Lektionen inkl. Formeln & Challenges
 ├── scene/               # 3D-Darstellung in Three.js
-│   ├── SceneManager.ts      # Renderer, Licht, ResizeObserver, Raycasting, Layouts
-│   └── components/          # Modulare 3D-Bauteile (ESP32, Breadboard, LED, LD2490, WLED, Mean Well, WAGO …)
+│   ├── SceneManager.ts      # Renderer, Licht/Raumdimmer, Raycasting, Lektionen & Sandbox
+│   └── components/          # Modulare 3D-Bauteile (ESP32, Pi, Breadboard, LED, LD2490, WLED, OLED …)
 ├── ui/                  # Framework-freies Engineering-UI
 │   ├── TelemetryHud.ts      # 5-Hz-gedrosseltes Messwert-HUD
 │   ├── Oscilloscope.ts      # HiDPI-2D-Oszilloskop mit VIH/VIL-Schwellen
-│   ├── CodeGenerator.ts     # Arduino C++, ESPHome YAML & eingebetteter Fritzing-Tab
-│   ├── FritzingSchematic.ts # Dynamischer SVG-Schaltplan-Renderer für alle 16 Lektionen
+│   ├── CodeGenerator.ts     # Arduino C++, Python/MicroPython, ESPHome YAML & Fritzing-Tab
+│   ├── FritzingSchematic.ts # Dynamischer SVG-Schaltplan-Renderer für alle 19 Lektionen
+│   ├── SandboxPanel.ts      # UI für Freie Werkbank & Geführten Bau-Assistenten
 │   └── ControlsPanel.ts     # Live-Erklärer, Parameter-Regler & Bauteil-Entfernen-UI
 └── main.ts              # Orchestrierung & Haupt-Simulationsschleife
 ```

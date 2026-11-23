@@ -1,10 +1,11 @@
 import './style.css';
-import { CircuitSolver, defaultComponentRegistry, ESP_BOARDS } from './engine';
+import { CircuitSolver, defaultComponentRegistry, ESP_BOARDS, getEspBoardById } from './engine';
 import type {
   CircuitParameters,
   CircuitTopologyId,
   EspBoardId,
   HoverPartInfo,
+  SimulationResult,
   ThemeMode,
 } from './engine';
 import {
@@ -13,14 +14,120 @@ import {
   LESSONS,
   type LessonCategory,
 } from './lessons/lessons';
+import {
+  applyGuidedStep,
+  getGuidedProjectById,
+  GUIDED_PROJECTS,
+} from './sandbox/GuidedProjects';
+import {
+  createStarterSandboxState,
+  evaluateSandboxCircuit,
+  getCatalogItem,
+} from './sandbox/SandboxEngine';
+import type {
+  AppMode,
+  HighlightMarker,
+  PlacedPart,
+  PlacedWire,
+  SandboxPartType,
+  SandboxSimSummary,
+  SandboxState,
+  SandboxToolId,
+  WireEndpoint,
+} from './sandbox/SandboxTypes';
 import { SceneManager } from './scene/SceneManager';
 import { CodeGeneratorPanel } from './ui/CodeGenerator';
 import { ControlsPanel } from './ui/ControlsPanel';
 import { FritzingSchematicPanel } from './ui/FritzingSchematic';
 import { Oscilloscope } from './ui/Oscilloscope';
+import { SandboxPanel } from './ui/SandboxPanel';
 import { TelemetryHud } from './ui/TelemetryHud';
 
 const THEME_STORAGE_KEY = 'learn-esp32-theme';
+
+function createDemoSandboxState(): SandboxState {
+  return {
+    parts: [
+      { id: 'demo-r1', type: 'resistor-220', col: 4, row: 'h' },
+      { id: 'demo-led1', type: 'led-red', col: 10, row: 'g' },
+      { id: 'demo-radar', type: 'ld2490', col: 15, row: 'h' },
+      { id: 'demo-oled', type: 'oled', col: 22, row: 'g' },
+    ],
+    wires: [
+      {
+        id: 'demo-w1',
+        from: { kind: 'board', boardPinRole: 'GND' },
+        to: { kind: 'breadboard', col: 2, row: '-top' },
+        colorHex: '#1e293b',
+      },
+      {
+        id: 'demo-w2',
+        from: { kind: 'board', boardPinRole: '3V3' },
+        to: { kind: 'breadboard', col: 3, row: '+top' },
+        colorHex: '#ef4444',
+      },
+      {
+        id: 'demo-w3',
+        from: { kind: 'board', boardPinRole: 'outA' },
+        to: { kind: 'breadboard', col: 4, row: 'f' },
+        colorHex: '#38bdf8',
+      },
+      {
+        id: 'demo-w4',
+        from: { kind: 'breadboard', col: 12, row: 'j' },
+        to: { kind: 'breadboard', col: 12, row: '-top' },
+        colorHex: '#1e293b',
+      },
+      {
+        id: 'demo-w5',
+        from: { kind: 'breadboard', col: 15, row: 'j' },
+        to: { kind: 'breadboard', col: 15, row: '+top' },
+        colorHex: '#ef4444',
+      },
+      {
+        id: 'demo-w6',
+        from: { kind: 'breadboard', col: 16, row: 'j' },
+        to: { kind: 'breadboard', col: 16, row: '-top' },
+        colorHex: '#1e293b',
+      },
+      {
+        id: 'demo-w6b',
+        from: { kind: 'breadboard', col: 19, row: 'i' },
+        to: { kind: 'board', boardPinRole: 'inputA' },
+        colorHex: '#22c55e',
+      },
+      {
+        id: 'demo-w7',
+        from: { kind: 'breadboard', col: 22, row: 'j' },
+        to: { kind: 'breadboard', col: 22, row: '-top' },
+        colorHex: '#1e293b',
+      },
+      {
+        id: 'demo-w8',
+        from: { kind: 'breadboard', col: 23, row: 'j' },
+        to: { kind: 'breadboard', col: 23, row: '+top' },
+        colorHex: '#ef4444',
+      },
+      {
+        id: 'demo-w9',
+        from: { kind: 'board', boardPinRole: 'scl' },
+        to: { kind: 'breadboard', col: 24, row: 'i' },
+        colorHex: '#facc15',
+      },
+      {
+        id: 'demo-w10',
+        from: { kind: 'board', boardPinRole: 'sda' },
+        to: { kind: 'breadboard', col: 25, row: 'h' },
+        colorHex: '#38bdf8',
+      },
+    ],
+    gpioHigh: true,
+    buttonPressed: false,
+    lightPercent: 60,
+    servoAngleDeg: 90,
+    radarPresent: true,
+  };
+}
 
 class LearnEsp32App {
   private readonly root: HTMLElement;
@@ -29,18 +136,33 @@ class LearnEsp32App {
   private theme: ThemeMode = 'dark';
   private roomDimmed = false;
 
+  // App-Modus: Lektionen | Freie Werkbank | Geführter Bau-Assistent
+  private appMode: AppMode = 'lessons';
+  private sandboxState: SandboxState = createStarterSandboxState();
+  private sandboxTool: SandboxToolId = 'place';
+  private selectedPartType: SandboxPartType = 'resistor-220';
+  private wireColorHex = '#38bdf8';
+  private wireStart: WireEndpoint | null = null;
+  private guidedProjectId: string = GUIDED_PROJECTS[0].id;
+
   private sceneManager!: SceneManager;
   private telemetryHud!: TelemetryHud;
   private oscilloscope!: Oscilloscope;
   private codeGenerator!: CodeGeneratorPanel;
   private controlsPanel!: ControlsPanel;
+  private sandboxPanel!: SandboxPanel;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
+  private lessonPickerWrapEl!: HTMLElement;
   private boardSelectEl!: HTMLSelectElement;
   private themeBtnEl!: HTMLButtonElement;
   private roomDimBtnEl!: HTMLButtonElement;
   private noBreadboardBtnEl!: HTMLButtonElement;
+  private controlsMountEl!: HTMLElement;
+  private sandboxMountEl!: HTMLElement;
+  private modeLegendEl!: HTMLElement;
+  private modeSubbarHintEl!: HTMLElement;
   private schematicModalEl!: HTMLElement;
   private boardsModalEl!: HTMLElement;
   private hoverTooltipEl!: HTMLElement;
@@ -130,7 +252,7 @@ class LearnEsp32App {
 
         <!-- Center Selectors: Lesson Picker (19) + Board Picker (10) -->
         <div class="flex items-center gap-2 min-w-0 flex-1 justify-center">
-          <div class="flex items-center gap-1 min-w-0 max-w-[325px] w-full">
+          <div data-wrap="lesson-picker" class="flex items-center gap-1 min-w-0 max-w-[325px] w-full">
             <button type="button" data-action="prev-lesson" title="Vorherige Lektion" class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs cursor-pointer shrink-0">◀</button>
             <select data-select="lesson" aria-label="Lektion auswählen" class="eng-select eng-input flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer focus:outline-none focus:border-cyan-500">
               ${lessonOptionsHtml}
@@ -223,6 +345,45 @@ class LearnEsp32App {
         </div>
       </header>
 
+      <!-- 3-Sektionen-Navigationsleiste: Lektionen | Freie Werkbank | Bau mit mir! -->
+      <nav class="eng-header shrink-0 px-3 sm:px-4 py-1.5 border-b flex items-center justify-between gap-3 z-20">
+        <div class="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Arbeitsbereich wählen">
+          <button
+            type="button"
+            role="tab"
+            data-mode="lessons"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>📚</span>
+            <span>Lektionen</span>
+            <span class="text-[10px] font-mono opacity-80">(19)</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-mode="sandbox"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>🔧</span>
+            <span>Freie Werkbank</span>
+            <span class="text-[10px] font-mono opacity-80">(14 Teile &amp; Kabel)</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-mode="guided"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>🧭</span>
+            <span>Bau mit mir!</span>
+            <span class="text-[10px] font-mono opacity-80">(3 Projekte)</span>
+          </button>
+        </div>
+        <div data-mode-hint class="hidden lg:flex items-center gap-1.5 text-[11px] font-mono eng-text-muted truncate">
+          <span>Wähle eine Lektion oder baue in der Werkbank deine eigene Schaltung</span>
+        </div>
+      </nav>
+
       <!-- Main Engineering Workspace -->
       <main class="flex-1 flex min-h-0 overflow-hidden">
         <!-- Left & Center Column: 3D Stage + Bottom Instruments Dock -->
@@ -249,7 +410,7 @@ class LearnEsp32App {
             </div>
 
             <!-- Subtle Controls Legend -->
-            <div class="eng-hud-card absolute bottom-3 left-3 z-10 pointer-events-none flex items-center gap-2 text-[11px] font-mono eng-text-muted backdrop-blur-sm border rounded-md px-2.5 py-1">
+            <div data-legend="mode" class="eng-hud-card absolute bottom-3 left-3 z-10 pointer-events-none flex items-center gap-2 text-[11px] font-mono eng-text-muted backdrop-blur-sm border rounded-md px-2.5 py-1">
               <span>Hover: Bauteil-Info</span>
               <span class="opacity-40">•</span>
               <span>Klick auf Bauteil: Entfernen/Einsetzen</span>
@@ -268,6 +429,7 @@ class LearnEsp32App {
         <!-- Right Inspector Sidebar -->
         <aside class="eng-sidebar w-[345px] xl:w-[390px] shrink-0 border-l overflow-y-auto p-4">
           <div data-mount="controls"></div>
+          <div data-mount="sandbox" class="hidden"></div>
         </aside>
       </main>
 
@@ -326,10 +488,15 @@ class LearnEsp32App {
     `;
 
     this.lessonSelectEl = this.root.querySelector('[data-select="lesson"]')!;
+    this.lessonPickerWrapEl = this.root.querySelector('[data-wrap="lesson-picker"]')!;
     this.boardSelectEl = this.root.querySelector('[data-select="board"]')!;
     this.themeBtnEl = this.root.querySelector('[data-action="toggle-theme"]')!;
     this.roomDimBtnEl = this.root.querySelector('[data-action="toggle-room-dim"]')!;
     this.noBreadboardBtnEl = this.root.querySelector('[data-action="toggle-breadboard"]')!;
+    this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
+    this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
+    this.modeLegendEl = this.root.querySelector('[data-legend="mode"]')!;
+    this.modeSubbarHintEl = this.root.querySelector('[data-mode-hint]')!;
     this.schematicModalEl = this.root.querySelector('[data-modal="schematic"]')!;
     this.boardsModalEl = this.root.querySelector('[data-modal="boards"]')!;
     this.hoverTooltipEl = this.root.querySelector('[data-tooltip="hover"]')!;
@@ -341,12 +508,13 @@ class LearnEsp32App {
     const hudMount = this.root.querySelector('[data-mount="hud"]') as HTMLElement;
     const scopeMount = this.root.querySelector('[data-mount="oscilloscope"]') as HTMLElement;
     const codeMount = this.root.querySelector('[data-mount="codegen"]') as HTMLElement;
-    const controlsMount = this.root.querySelector('[data-mount="controls"]') as HTMLElement;
 
     this.sceneManager = new SceneManager(sceneMount, {
       onButtonPressChange: (pressed) => this.setButtonPressed(pressed),
       onHoverPartChange: (info, x, y) => this.updateHoverTooltip(info, x, y),
       onTogglePartRemoved: (partId) => this.togglePartRemoved(partId),
+      onSandboxEndpointClick: (endpoint) => this.handleSandboxEndpointClick(endpoint),
+      onSandboxDeleteItem: (kind, id) => this.handleSandboxDeleteItem(kind, id),
     });
 
     this.telemetryHud = new TelemetryHud(hudMount);
@@ -355,15 +523,91 @@ class LearnEsp32App {
     this.modalFritzing = new FritzingSchematicPanel(
       this.root.querySelector('[data-mount="modal-fritzing"]') as HTMLElement,
     );
-    this.controlsPanel = new ControlsPanel(controlsMount, {
+    this.controlsPanel = new ControlsPanel(this.controlsMountEl, {
       onParamsChange: (patch) => this.updateParams(patch),
       onButtonPressChange: (pressed) => this.setButtonPressed(pressed),
       onTogglePartRemoved: (partId) => this.togglePartRemoved(partId),
       onRestoreAllParts: () => this.restoreAllParts(),
     });
+    this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
+      onSelectTool: (tool) => {
+        this.sandboxTool = tool;
+        this.wireStart = null;
+        this.sceneManager.setSandboxTool(tool);
+        this.stepSimulation(true);
+      },
+      onSelectPartType: (type) => {
+        this.selectedPartType = type;
+        this.sandboxTool = 'place';
+        this.wireStart = null;
+        this.sceneManager.setSandboxTool('place');
+        this.stepSimulation(true);
+      },
+      onSelectWireColor: (hex) => {
+        this.wireColorHex = hex;
+        this.sandboxTool = 'wire';
+        this.sceneManager.setSandboxTool('wire');
+        this.stepSimulation(true);
+      },
+      onCancelWire: () => {
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onDeletePart: (id) => {
+        this.sandboxState = {
+          ...this.sandboxState,
+          parts: this.sandboxState.parts.filter((p) => p.id !== id),
+        };
+        this.stepSimulation(true);
+      },
+      onDeleteWire: (id) => {
+        this.sandboxState = {
+          ...this.sandboxState,
+          wires: this.sandboxState.wires.filter((w) => w.id !== id),
+        };
+        this.stepSimulation(true);
+      },
+      onClearBoard: () => {
+        this.sandboxState = createStarterSandboxState();
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onLoadStarterKit: () => {
+        this.sandboxState = createDemoSandboxState();
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onStatePatch: (patch) => {
+        this.sandboxState = { ...this.sandboxState, ...patch };
+        this.stepSimulation(true);
+      },
+      onSelectGuidedProject: (projectId) => {
+        this.guidedProjectId = projectId;
+        this.sandboxState = createStarterSandboxState();
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onAutoApplyGuidedStep: () => {
+        const project = getGuidedProjectById(this.guidedProjectId);
+        const activeStep = project.steps.find((s) => !s.isCompleted(this.sandboxState));
+        if (!activeStep) return;
+        this.sandboxState = applyGuidedStep(this.sandboxState, activeStep);
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onRestartGuidedProject: () => {
+        this.sandboxState = createStarterSandboxState();
+        this.wireStart = null;
+        this.stepSimulation(true);
+      },
+      onSwitchToFreeSandbox: () => {
+        this.setAppMode('sandbox');
+      },
+    });
 
     this.populateRegistryModal();
     this.populateBoardsShowcaseModal();
+    this.updateModeUi();
   }
 
   private populateBoardsShowcaseModal(): void {
@@ -617,6 +861,13 @@ class LearnEsp32App {
   }
 
   private bindGlobalEvents(): void {
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode as AppMode;
+        this.setAppMode(mode);
+      });
+    });
+
     this.lessonSelectEl.addEventListener('change', () => {
       this.selectLesson(this.lessonSelectEl.value as CircuitTopologyId, false);
     });
@@ -694,8 +945,12 @@ class LearnEsp32App {
     });
 
     this.root.querySelector('[data-action="reset-camera"]')?.addEventListener('click', () => {
-      const lesson = getLessonById(this.params.topology);
-      this.sceneManager.focusCamera(lesson.cameraPreset.position, lesson.cameraPreset.target);
+      if (this.appMode === 'lessons') {
+        const lesson = getLessonById(this.params.topology);
+        this.sceneManager.focusCamera(lesson.cameraPreset.position, lesson.cameraPreset.target);
+      } else {
+        this.sceneManager.focusCamera([1.4, 11.4, 10.6], [1.1, 0.35, 0.35]);
+      }
     });
 
     const modal = this.root.querySelector('[data-modal="registry"]') as HTMLElement;
@@ -715,9 +970,20 @@ class LearnEsp32App {
     });
 
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.wireStart) {
+        this.wireStart = null;
+        this.stepSimulation(true);
+        return;
+      }
       if (e.code !== 'Space' || e.repeat) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (this.appMode !== 'lessons') {
+        e.preventDefault();
+        this.setButtonPressed(true);
+        return;
+      }
 
       if (this.params.topology === 'button-pull') {
         e.preventDefault();
@@ -733,6 +999,11 @@ class LearnEsp32App {
 
     window.addEventListener('keyup', (e) => {
       if (e.code !== 'Space') return;
+      if (this.appMode !== 'lessons' && this.sandboxState.buttonPressed) {
+        e.preventDefault();
+        this.setButtonPressed(false);
+        return;
+      }
       if (this.params.topology === 'button-pull' && this.params.buttonPressed) {
         e.preventDefault();
         this.setButtonPressed(false);
@@ -740,10 +1011,216 @@ class LearnEsp32App {
     });
 
     window.addEventListener('blur', () => {
-      if (this.params.buttonPressed) {
+      if (this.params.buttonPressed || this.sandboxState.buttonPressed) {
         this.setButtonPressed(false);
       }
     });
+  }
+
+  private setAppMode(mode: AppMode): void {
+    if (this.appMode === mode) return;
+    const prevMode = this.appMode;
+    this.appMode = mode;
+    this.wireStart = null;
+    this.hoverTooltipEl.classList.add('hidden');
+
+    if (mode === 'guided' && prevMode !== 'guided') {
+      // Beim Start des Geführten Assistenten mit sauberem Steckbrett beginnen, falls noch Demo/alte Teile liegen
+      this.sandboxState = createStarterSandboxState();
+    }
+
+    this.updateModeUi();
+
+    if (mode === 'lessons') {
+      const lesson = getLessonById(this.params.topology);
+      this.sceneManager.focusCamera(lesson.cameraPreset.position, lesson.cameraPreset.target);
+    } else {
+      this.sceneManager.setSandboxTool(this.sandboxTool);
+      this.sceneManager.focusCamera([1.4, 11.4, 10.6], [1.1, 0.35, 0.35]);
+    }
+
+    this.oscilloscope.clear();
+    this.stepSimulation(true);
+  }
+
+  private updateModeUi(): void {
+    const isLessons = this.appMode === 'lessons';
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
+      const m = btn.dataset.mode as AppMode;
+      const active = m === this.appMode;
+      if (active) {
+        const activeStyle =
+          m === 'guided'
+            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.22)]'
+            : m === 'sandbox'
+              ? 'bg-amber-500/20 border-amber-500 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.22)]'
+              : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+        btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${activeStyle}`;
+        btn.setAttribute('aria-selected', 'true');
+      } else {
+        btn.className =
+          'eng-btn-neutral px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5';
+        btn.setAttribute('aria-selected', 'false');
+      }
+    });
+
+    this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
+    this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
+    this.controlsMountEl.classList.toggle('hidden', !isLessons);
+    this.sandboxMountEl.classList.toggle('hidden', isLessons);
+
+    if (this.appMode === 'lessons') {
+      this.modeSubbarHintEl.textContent =
+        '19 fertige Schaltungen mit Live-Physik, Oszilloskop & Code-Generator';
+      this.modeLegendEl.innerHTML = `
+        <span>Hover: Bauteil-Info</span>
+        <span class="opacity-40">•</span>
+        <span>Klick auf Bauteil: Entfernen/Einsetzen</span>
+        <span class="opacity-40">•</span>
+        <span data-hint="interactive" class="eng-text-accent">${getLessonById(this.params.topology).getPrimaryPin(this.params.boardId)} · Live</span>
+      `;
+    } else if (this.appMode === 'sandbox') {
+      this.modeSubbarHintEl.textContent =
+        'Wähle rechts ein Bauteil oder Jumperkabel und klicke direkt auf Breadboard-Löcher oder leuchtende Board-Pins!';
+      this.modeLegendEl.innerHTML = `
+        <span>Bauteil setzen: Klick auf Steckbrett</span>
+        <span class="opacity-40">•</span>
+        <span>Jumperkabel: 2 Punkte anklicken (ESC = Abbruch)</span>
+        <span class="opacity-40">•</span>
+        <span class="eng-text-accent">Freie Werkbank Live</span>
+      `;
+    } else {
+      this.modeSubbarHintEl.textContent =
+        'Folge den pulsierenden 3D-Markierungen oder klicke rechts auf „Diesen Schritt für mich stecken“!';
+      this.modeLegendEl.innerHTML = `
+        <span>Pulsierende Ringe: Hier klicken!</span>
+        <span class="opacity-40">•</span>
+        <span>Automatische Schritt-Prüfung</span>
+        <span class="opacity-40">•</span>
+        <span class="text-emerald-500">🧭 Bau mit mir! Aktiv</span>
+      `;
+    }
+  }
+
+  private handleSandboxEndpointClick(endpoint: WireEndpoint): void {
+    if (this.appMode === 'guided') {
+      const project = getGuidedProjectById(this.guidedProjectId);
+      const activeStep = project.steps.find((s) => !s.isCompleted(this.sandboxState));
+      if (!activeStep) return;
+
+      if (activeStep.action.kind === 'place-part') {
+        if (endpoint.kind !== 'breadboard' || endpoint.col === undefined) return;
+        const item = getCatalogItem(activeStep.action.partType);
+        const nearTarget = Math.abs(endpoint.col - activeStep.action.col) <= 2;
+        const col = nearTarget
+          ? activeStep.action.col
+          : Math.max(1, Math.min(30 - item.colSpan, endpoint.col));
+        const row = nearTarget ? activeStep.action.row : item.preferredRow;
+        const newPart: PlacedPart = {
+          id: `part-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: activeStep.action.partType,
+          col,
+          row,
+        };
+        this.sandboxState = {
+          ...this.sandboxState,
+          parts: [...this.sandboxState.parts, newPart],
+        };
+        this.stepSimulation(true);
+        return;
+      }
+
+      // Guided wire step: 2 clicks (start -> end)
+      if (!this.wireStart) {
+        this.wireStart = endpoint;
+        this.stepSimulation(true);
+        return;
+      }
+      if (this.areSameEndpoints(this.wireStart, endpoint)) {
+        this.wireStart = null;
+        this.stepSimulation(true);
+        return;
+      }
+      const newWire: PlacedWire = {
+        id: `wire-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        from: this.wireStart,
+        to: endpoint,
+        colorHex: activeStep.action.colorHex,
+      };
+      this.wireStart = null;
+      this.sandboxState = {
+        ...this.sandboxState,
+        wires: [...this.sandboxState.wires, newWire],
+      };
+      this.stepSimulation(true);
+      return;
+    }
+
+    // Free Sandbox Mode
+    if (this.sandboxTool === 'place') {
+      if (endpoint.kind !== 'breadboard' || endpoint.col === undefined) return;
+      const item = getCatalogItem(this.selectedPartType);
+      const col = Math.max(1, Math.min(30 - item.colSpan, endpoint.col));
+      const newPart: PlacedPart = {
+        id: `part-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: this.selectedPartType,
+        col,
+        row: item.preferredRow,
+      };
+      this.sandboxState = {
+        ...this.sandboxState,
+        parts: [...this.sandboxState.parts, newPart],
+      };
+      this.stepSimulation(true);
+      return;
+    }
+
+    if (this.sandboxTool === 'wire') {
+      if (!this.wireStart) {
+        this.wireStart = endpoint;
+        this.stepSimulation(true);
+        return;
+      }
+      if (this.areSameEndpoints(this.wireStart, endpoint)) {
+        this.wireStart = null;
+        this.stepSimulation(true);
+        return;
+      }
+      const newWire: PlacedWire = {
+        id: `wire-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        from: this.wireStart,
+        to: endpoint,
+        colorHex: this.wireColorHex,
+      };
+      this.wireStart = null;
+      this.sandboxState = {
+        ...this.sandboxState,
+        wires: [...this.sandboxState.wires, newWire],
+      };
+      this.stepSimulation(true);
+    }
+  }
+
+  private handleSandboxDeleteItem(kind: 'part' | 'wire', id: string): void {
+    if (kind === 'part') {
+      this.sandboxState = {
+        ...this.sandboxState,
+        parts: this.sandboxState.parts.filter((p) => p.id !== id),
+      };
+    } else {
+      this.sandboxState = {
+        ...this.sandboxState,
+        wires: this.sandboxState.wires.filter((w) => w.id !== id),
+      };
+    }
+    this.stepSimulation(true);
+  }
+
+  private areSameEndpoints(a: WireEndpoint, b: WireEndpoint): boolean {
+    if (a.kind !== b.kind) return false;
+    if (a.kind === 'board') return a.boardPinRole === b.boardPinRole;
+    return a.col === b.col && a.row === b.row;
   }
 
   private selectBoard(boardId: EspBoardId): void {
@@ -807,6 +1284,13 @@ class LearnEsp32App {
   }
 
   private setButtonPressed(pressed: boolean): void {
+    if (this.appMode !== 'lessons') {
+      if (this.sandboxState.buttonPressed === pressed) return;
+      this.sandboxState = { ...this.sandboxState, buttonPressed: pressed };
+      this.stepSimulation(true);
+      return;
+    }
+
     if (this.params.buttonPressed === pressed) return;
     this.params = { ...this.params, buttonPressed: pressed };
     const lesson = getLessonById(this.params.topology);
@@ -857,23 +1341,144 @@ class LearnEsp32App {
     this.stepSimulation(true);
   }
 
+  private buildSandboxSimResult(
+    summary: SandboxSimSummary,
+    elapsedSeconds: number,
+  ): SimulationResult {
+    const board = getEspBoardById(this.params.boardId);
+    const logicLevel =
+      summary.nodeVoltage >= 2.48 ? 'HIGH' : summary.nodeVoltage <= 0.83 ? 'LOW' : 'UNDEFINED';
+    const powerMw = 3.3 * summary.totalCurrentMa;
+
+    return {
+      timestamp: elapsedSeconds,
+      topology: this.params.topology,
+      boardId: this.params.boardId,
+      probeLabel: summary.probeLabel,
+      probePin: board.pins.outA.label,
+      nodeVoltage: summary.nodeVoltage,
+      currentMa: summary.totalCurrentMa,
+      powerMw,
+      logicLevel,
+      extraTitle: this.appMode === 'guided' ? 'Bau-Assistent' : 'Werkbank-Status',
+      extraDisplay: `${summary.activePartsCount} / ${this.sandboxState.parts.length} aktiv`,
+      extraPercent:
+        this.sandboxState.parts.length > 0
+          ? Math.round((summary.activePartsCount / this.sandboxState.parts.length) * 100)
+          : 0,
+      ledForwardVoltage: 2.0,
+      ledVoltageDrop: 0,
+      resistorVoltageDrop: 0,
+      ledBrightnessPercent: summary.activePartsCount > 0 ? 100 : 0,
+      isOvercurrent: summary.overcurrentAlert,
+      isCriticalOvercurrent: summary.overcurrentAlert,
+      adcRaw: Math.round((summary.nodeVoltage / 3.3) * 4095),
+      adcPercent: Math.round((summary.nodeVoltage / 3.3) * 100),
+      effectiveR1Ohms: 220,
+      effectiveR2Ohms: 10000,
+      statusLedOn: summary.activePartsCount > 0,
+      rgbHex: '#22d3ee',
+      capacitorChargeRatio: 0,
+      radarDetected: this.sandboxState.radarPresent,
+      radarSignalStrength: this.sandboxState.radarPresent ? 85 : 10,
+      relayClosed: false,
+      kickbackSpikeActive: false,
+      servoAngleDeg: this.sandboxState.servoAngleDeg,
+      buzzerActive: false,
+      wledEndVoltage: 5,
+      wledVoltageDropRatio: 0,
+      wledDataGlitch: false,
+      wledEffectiveBrightnessPct: 0,
+      wledBatteryRuntimeHours: 0,
+      piTrafficLeds: { red: false, yellow: false, green: false },
+      piFanSpeedPct: 0,
+      piOledLines: [],
+      explanation: {
+        statusBadge: summary.statusBadge,
+        statusTone: summary.statusTone,
+        whatHappens: summary.whatHappens,
+        whyItHappens: summary.whyItHappens,
+      },
+      warnings: summary.overcurrentAlert
+        ? [
+            {
+              severity: 'danger',
+              code: 'SANDBOX_OVERCURRENT',
+              title: 'Vorwiderstand fehlt!',
+              message: 'Eine LED leitet ohne Vorwiderstand zu viel Strom. Stecke 220 Ω in Reihe!',
+            },
+          ]
+        : [],
+    };
+  }
+
   private stepSimulation(forceHudUpdate: boolean): void {
     const nowMs = performance.now();
     const elapsedSeconds = (nowMs - this.startTimeMs) / 1000;
 
-    const result = this.solver.solve(this.params, elapsedSeconds);
-    this.sceneManager.syncSimulation(this.params, result);
-    this.telemetryHud.update(result, nowMs, forceHudUpdate);
-    this.oscilloscope.pushSample(result, nowMs);
+    if (this.appMode === 'lessons') {
+      const result = this.solver.solve(this.params, elapsedSeconds);
+      this.sceneManager.syncSimulation(this.params, result);
+      this.telemetryHud.update(result, nowMs, forceHudUpdate);
+      this.oscilloscope.pushSample(result, nowMs);
 
-    if (forceHudUpdate || nowMs - this.lastExplainUpdateMs >= 200) {
-      this.lastExplainUpdateMs = nowMs;
-      this.controlsPanel.updateExplanation(result.explanation);
+      if (forceHudUpdate || nowMs - this.lastExplainUpdateMs >= 200) {
+        this.lastExplainUpdateMs = nowMs;
+        this.controlsPanel.updateExplanation(result.explanation);
+      }
+
+      if (forceHudUpdate) {
+        this.codeGenerator.update(this.params, result);
+        this.modalFritzing.update(this.params, result, this.theme);
+      }
+      return;
     }
 
-    if (forceHudUpdate) {
-      this.codeGenerator.update(this.params, result);
-      this.modalFritzing.update(this.params, result, this.theme);
+    // Freie Werkbank (sandbox) oder Geführter Bau-Assistent (guided)
+    const summary = evaluateSandboxCircuit(this.sandboxState, this.params.boardId, elapsedSeconds);
+    const guidedProject = getGuidedProjectById(this.guidedProjectId);
+    let highlights: HighlightMarker[] = [];
+
+    if (this.appMode === 'guided') {
+      const activeStep = guidedProject.steps.find((s) => !s.isCompleted(this.sandboxState));
+      if (activeStep) {
+        highlights = activeStep.highlights;
+        this.sceneManager.setSandboxTool(
+          activeStep.action.kind === 'place-part' ? 'place' : 'wire',
+        );
+      } else {
+        this.sceneManager.setSandboxTool('wire');
+      }
+    } else {
+      this.sceneManager.setSandboxTool(this.sandboxTool);
+    }
+
+    this.sceneManager.syncSandbox(
+      this.params.boardId,
+      this.sandboxState,
+      summary,
+      highlights,
+      this.wireStart,
+      elapsedSeconds,
+    );
+
+    const sandboxSimResult = this.buildSandboxSimResult(summary, elapsedSeconds);
+    this.telemetryHud.update(sandboxSimResult, nowMs, forceHudUpdate);
+    this.oscilloscope.pushSample(sandboxSimResult, nowMs);
+
+    if (forceHudUpdate || nowMs - this.lastExplainUpdateMs >= 160) {
+      this.lastExplainUpdateMs = nowMs;
+      this.sandboxPanel.render({
+        mode: this.appMode,
+        boardId: this.params.boardId,
+        tool: this.sandboxTool,
+        selectedPartType: this.selectedPartType,
+        wireColorHex: this.wireColorHex,
+        wireStart: this.wireStart,
+        state: this.sandboxState,
+        summary,
+        guidedProject,
+      });
     }
   }
 

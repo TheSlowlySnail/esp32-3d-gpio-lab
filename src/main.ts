@@ -1234,6 +1234,7 @@ class LearnEsp32App {
     this.workspaceMainEl.classList.toggle('hidden', isFullGallery);
     this.funnyMountEl.classList.toggle('hidden', this.appMode !== 'funny');
     this.favoritesMountEl.classList.toggle('hidden', this.appMode !== 'favorites');
+    this.sceneManager.setPaused(isFullGallery);
 
     this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
     this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
@@ -1703,5 +1704,18 @@ class LearnEsp32App {
 
 const appRoot = document.getElementById('app');
 if (appRoot) {
-  new LearnEsp32App(appRoot);
+  const win = window as Window & { __learnEspApp?: LearnEsp32App };
+  win.__learnEspApp?.dispose();
+  const app = new LearnEsp32App(appRoot);
+  win.__learnEspApp = app;
+
+  const hot = (import.meta as ImportMeta & { hot?: { dispose: (cb: () => void) => void } }).hot;
+  if (hot) {
+    hot.dispose(() => {
+      app.dispose();
+      if (win.__learnEspApp === app) {
+        delete win.__learnEspApp;
+      }
+    });
+  }
 }

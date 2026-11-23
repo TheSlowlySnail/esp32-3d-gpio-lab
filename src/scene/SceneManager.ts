@@ -222,6 +222,8 @@ export class SceneManager {
   private rafId = 0;
   private lastFrameTime = performance.now();
   private disposed = false;
+  private paused = false;
+  private contextLost = false;
 
   constructor(container: HTMLElement, callbacks: SceneCallbacks = {}) {
     this.container = container;
@@ -322,9 +324,38 @@ export class SceneManager {
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.addEventListener('pointerleave', this.onPointerLeave);
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost, false);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored, false);
     window.addEventListener('pointerup', this.onPointerUp);
 
     this.startRenderLoop();
+  }
+
+  private readonly onContextLost = (e: Event): void => {
+    e.preventDefault();
+    this.contextLost = true;
+  };
+
+  private readonly onContextRestored = (): void => {
+    this.contextLost = false;
+    this.applyEnvironmentLighting();
+    this.forceResize();
+  };
+
+  public setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (!paused) {
+      requestAnimationFrame(() => this.forceResize());
+    }
+  }
+
+  public forceResize(): void {
+    if (this.disposed) return;
+    const w = this.container.clientWidth;
+    const h = this.container.clientHeight;
+    if (w > 0 && h > 0) {
+      this.handleResize(w, h);
+    }
   }
 
   private tagEspBoard(): void {
@@ -403,6 +434,8 @@ export class SceneManager {
       // Darkened studio room so LEDs, WLED strips, traffic lights & OLED glow vividly!
       this.scene.background = new THREE.Color('#02040a');
       this.scene.fog = new THREE.FogExp2('#02040a', 0.018);
+      this.renderer.setClearColor('#02040a', 1);
+      this.container.style.backgroundColor = '#02040a';
       this.floorMat.map = this.darkFloorTex;
       this.floorMat.needsUpdate = true;
       this.esdMat.color.setHex(0x090d16);
@@ -417,6 +450,8 @@ export class SceneManager {
     if (this.currentTheme === 'light') {
       this.scene.background = new THREE.Color('#e6edf6');
       this.scene.fog = new THREE.FogExp2('#e6edf6', 0.011);
+      this.renderer.setClearColor('#e6edf6', 1);
+      this.container.style.backgroundColor = '#e6edf6';
       this.floorMat.map = this.lightFloorTex;
       this.floorMat.needsUpdate = true;
       this.esdMat.color.setHex(0xd4dee9);
@@ -428,6 +463,8 @@ export class SceneManager {
     } else {
       this.scene.background = new THREE.Color('#0a101d');
       this.scene.fog = new THREE.FogExp2('#0a101d', 0.015);
+      this.renderer.setClearColor('#0a101d', 1);
+      this.container.style.backgroundColor = '#0a101d';
       this.floorMat.map = this.darkFloorTex;
       this.floorMat.needsUpdate = true;
       this.esdMat.color.setHex(0x131c31);
@@ -2177,6 +2214,9 @@ export class SceneManager {
       const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
       this.lastFrameTime = now;
 
+      if (this.paused || this.contextLost) return;
+      if (this.container.clientWidth === 0 || this.container.clientHeight === 0) return;
+
       if (this.cameraAnimTargetPos && this.cameraAnimLookAt) {
         const alpha = 1 - Math.exp(-dt * 5.5);
         this.camera.position.lerp(this.cameraAnimTargetPos, alpha);
@@ -2218,9 +2258,12 @@ export class SceneManager {
     this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.removeEventListener('pointerleave', this.onPointerLeave);
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     window.removeEventListener('pointerup', this.onPointerUp);
     this.controls.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
   }
 }

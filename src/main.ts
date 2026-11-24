@@ -47,6 +47,7 @@ import { FritzingSchematicPanel } from './ui/FritzingSchematic';
 import { FunnyIdeasView } from './ui/FunnyIdeasView';
 import { Oscilloscope } from './ui/Oscilloscope';
 import { SandboxPanel } from './ui/SandboxPanel';
+import { SolderingView } from './ui/SolderingView';
 import { TelemetryHud } from './ui/TelemetryHud';
 
 const THEME_STORAGE_KEY = 'learn-esp32-theme';
@@ -164,6 +165,7 @@ class LearnEsp32App {
   private sandboxPanel!: SandboxPanel;
   private funnyView!: FunnyIdeasView;
   private favoritesView!: FavoritesView;
+  private solderingView!: SolderingView;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
@@ -176,6 +178,7 @@ class LearnEsp32App {
   private workspaceMainEl!: HTMLElement;
   private funnyMountEl!: HTMLElement;
   private favoritesMountEl!: HTMLElement;
+  private solderingMountEl!: HTMLElement;
   private favCountBadgeEl!: HTMLElement;
   private controlsMountEl!: HTMLElement;
   private sandboxMountEl!: HTMLElement;
@@ -221,6 +224,7 @@ class LearnEsp32App {
       'Raspberry Pi',
       'Arduino Praxis',
       'Smart Home & IoT',
+      'Netzteile & Akkus',
     ];
 
     const lessonOptionsHtml = categories
@@ -416,6 +420,15 @@ class LearnEsp32App {
           <button
             type="button"
             role="tab"
+            data-mode="soldering"
+            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>🔥</span>
+            <span>Löten</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
             data-mode="favorites"
             class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
@@ -484,6 +497,9 @@ class LearnEsp32App {
       <!-- Rubrik: Favoriten (Gespeicherte Bauteile, Lektionen, Bauprojekte & Funny Ideen) -->
       <section data-mount="favorites" class="hidden flex-1 overflow-y-auto"></section>
 
+      <!-- Rubrik: Löt-Werkstatt & Interaktiver Löt-Trainer -->
+      <section data-mount="soldering" class="hidden flex-1 overflow-y-auto"></section>
+
       <!-- Component Registry Modal -->
       <div data-modal="registry" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm items-center justify-center p-4">
         <div class="eng-card w-full max-w-3xl rounded-xl border shadow-2xl overflow-hidden">
@@ -548,6 +564,7 @@ class LearnEsp32App {
     this.workspaceMainEl = this.root.querySelector('[data-wrap="workspace"]')!;
     this.funnyMountEl = this.root.querySelector('[data-mount="funny"]')!;
     this.favoritesMountEl = this.root.querySelector('[data-mount="favorites"]')!;
+    this.solderingMountEl = this.root.querySelector('[data-mount="soldering"]')!;
     this.favCountBadgeEl = this.root.querySelector('[data-fav-count]')!;
     this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
     this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
@@ -617,6 +634,7 @@ class LearnEsp32App {
         this.refreshFavoritesUi();
       },
     });
+    this.solderingView = new SolderingView(this.solderingMountEl);
     this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
       onSelectTool: (tool) => {
         this.sandboxTool = tool;
@@ -1206,6 +1224,9 @@ class LearnEsp32App {
       this.favoritesView.render();
       return;
     }
+    if (mode === 'soldering') {
+      return;
+    }
 
     if (mode === 'lessons') {
       const lesson = getLessonById(this.params.topology);
@@ -1221,7 +1242,8 @@ class LearnEsp32App {
 
   private updateModeUi(): void {
     const isLessons = this.appMode === 'lessons';
-    const isFullGallery = this.appMode === 'funny' || this.appMode === 'favorites';
+    const isFullGallery =
+      this.appMode === 'funny' || this.appMode === 'favorites' || this.appMode === 'soldering';
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       const m = btn.dataset.mode as AppMode;
@@ -1234,14 +1256,16 @@ class LearnEsp32App {
               ? 'bg-amber-500/20 border-amber-500 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.22)]'
               : m === 'funny'
                 ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.25)]'
-                : m === 'favorites'
-                  ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
-                  : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
-        btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${activeStyle}`;
+                : m === 'soldering'
+                  ? 'bg-orange-500/22 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.28)]'
+                  : m === 'favorites'
+                    ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
+                    : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+        btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeStyle}`;
         btn.setAttribute('aria-selected', 'true');
       } else {
         btn.className =
-          'eng-btn-neutral px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5';
+          'eng-btn-neutral px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap';
         btn.setAttribute('aria-selected', 'false');
       }
     });
@@ -1249,7 +1273,9 @@ class LearnEsp32App {
     this.workspaceMainEl.classList.toggle('hidden', isFullGallery);
     this.funnyMountEl.classList.toggle('hidden', this.appMode !== 'funny');
     this.favoritesMountEl.classList.toggle('hidden', this.appMode !== 'favorites');
+    this.solderingMountEl.classList.toggle('hidden', this.appMode !== 'soldering');
     this.sceneManager.setPaused(isFullGallery);
+    this.solderingView.setActive(this.appMode === 'soldering');
 
     this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
     this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
@@ -1288,7 +1314,10 @@ class LearnEsp32App {
       `;
     } else if (this.appMode === 'funny') {
       this.modeSubbarHintEl.textContent =
-        `${FUNNY_IDEAS.length} witzige Maker-Ideen für ESP32 & Raspberry Pi — jede mit 1-Klick-3D-Prototyp!`;
+        `${FUNNY_IDEAS.length} witzige Maker-Ideen für ESP32, Raspberry Pi & Arduino — jede mit 1-Klick-3D-Prototyp!`;
+    } else if (this.appMode === 'soldering') {
+      this.modeSubbarHintEl.textContent =
+        'Interaktiver Löt-Trainer: Temperatur regeln, Pad erhitzen, Zinn zuführen & perfekte Kegel üben!';
     } else {
       this.modeSubbarHintEl.textContent =
         'Deine persönliche Sammlung aus Lieblings-Sensoren, Aktoren, Lektionen, Projekten & Funny-Ideen';
@@ -1633,7 +1662,9 @@ class LearnEsp32App {
   }
 
   private stepSimulation(forceHudUpdate: boolean): void {
-    if (this.appMode === 'funny' || this.appMode === 'favorites') return;
+    if (this.appMode === 'funny' || this.appMode === 'favorites' || this.appMode === 'soldering') {
+      return;
+    }
 
     const nowMs = performance.now();
     const elapsedSeconds = (nowMs - this.startTimeMs) / 1000;
@@ -1668,11 +1699,25 @@ class LearnEsp32App {
         this.sceneManager.setSandboxTool(
           activeStep.action.kind === 'place-part' ? 'place' : 'wire',
         );
+        this.sceneManager.setSandboxGhostPartType(
+          activeStep.action.kind === 'place-part' ? activeStep.action.partType : null,
+        );
       } else {
         this.sceneManager.setSandboxTool('wire');
+        this.sceneManager.setSandboxGhostPartType(null);
       }
     } else {
       this.sceneManager.setSandboxTool(this.sandboxTool);
+      const movedPart = this.selectedMovePartId
+        ? this.sandboxState.parts.find((p) => p.id === this.selectedMovePartId)
+        : null;
+      this.sceneManager.setSandboxGhostPartType(
+        this.sandboxTool === 'place'
+          ? this.selectedPartType
+          : this.sandboxTool === 'move' && movedPart
+            ? movedPart.type
+            : null,
+      );
     }
 
     this.sceneManager.syncSandbox(
@@ -1720,6 +1765,7 @@ class LearnEsp32App {
     cancelAnimationFrame(this.rafId);
     this.sceneManager.dispose();
     this.oscilloscope.dispose();
+    this.solderingView.dispose();
   }
 }
 

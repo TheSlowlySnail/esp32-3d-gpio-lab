@@ -8,11 +8,12 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ## Highlights & Features
 
-- **5 interaktive Arbeitsbereiche (Navigationsleiste):**
-  - **📚 Lektionen (59):** 59 interaktive Schaltungen & Experimente in 8 Kategorien — inkl. **Arduino Praxis**, **Smart Home & IoT**, **Raspberry Pi**, **WLED & LED-Streifen**, Grundlagen, PWM, Sensoren & Aktoren.
-  - **🔧 Freie Werkbank (196 Bauteile & Kabel):** Eigene Schaltungen punktgenau auf oberer (`f`–`j`) **und** unterer (`a`–`e`) Steckbretthälfte aufbauen, **verschieben (`✋` in 3D + `◀`/`▶`)**, **löschen (`🗑` in 3D + `×`)** und mit **6-farbigen 3D-Jumperkabeln** verkabeln — alle **196 Bauteile** mit Symbolen/Icons, Suche, Kategorie- & `★ Fav`-Filter (**54 Sensoren**, **47 Aktoren & Displays**, **47 LEDs & Ausgabe**, **48 Passiv & Schalter**).
-  - **🧭 Bau mit mir! (50 Geführte Bauprojekte):** 50 komplette Schritt-für-Schritt-Projekte von der ersten LED über Ampel, CO₂-Ampel, Bewässerung, Geheim-Tresor, Gesten-Dimmer & Nixie-Uhr bis zu 5V-Lüfter + NeoPixel-Ring — mit pulsierenden 3D-Zielmarkierungen und Ein-Klick-Helfer (`✨ Diesen Schritt für mich stecken`).
+- **6 interaktive Arbeitsbereiche (Navigationsleiste):**
+  - **📚 Lektionen (65):** 65 interaktive Schaltungen & Experimente in 9 Kategorien — inkl. **Netzteile & Akkus (6 konfigurierbare Power-Labs)**, **Arduino Praxis**, **Smart Home & IoT**, **Raspberry Pi**, **WLED & LED-Streifen**, Grundlagen, PWM, Sensoren & Aktoren.
+  - **🔧 Freie Werkbank (200 Bauteile & Kabel):** Eigene Schaltungen mit **Live-3D-Hover-Vorschau (Ghost + Pin-Ringe)** punktgenau auf oberer (`f`–`j`) **und** unterer (`a`–`e`) Steckbretthälfte aufbauen, **verschieben (`✋` in 3D + `◀`/`▶`)**, **löschen (`🗑` in 3D + `×`)** und mit **6-farbigen 3D-Jumperkabeln** verkabeln — alle **200 Bauteile** mit Symbolen/Icons, Suche, Kategorie- & `★ Fav`-Filter (inkl. **Labornetzteil, Mean Well 12 V, 18650-Akkupack & LiPo-Zelle**, **54 Sensoren**, **47 Aktoren & Displays**, **47 LEDs & Ausgabe**, **52 Passiv, Schalter & Stromversorgung**).
+  - **🧭 Bau mit mir! (50 Geführte Bauprojekte):** 50 komplette Schritt-für-Schritt-Projekte von der ersten LED über Ampel, CO₂-Ampel, Bewässerung, Geheim-Tresor, Gesten-Dimmer & Nixie-Uhr bis zu 5V-Lüfter + NeoPixel-Ring — mit Live-3D-Hover-Vorschau, pulsierenden Zielmarkierungen und Ein-Klick-Helfer (`✨ Diesen Schritt für mich stecken`).
   - **😂 Funny Ideen (52 Spaß-Projekte für ESP32, Raspberry Pi & Arduino):** 52 kreative, lustige und wirklich baubare Maker-Ideen — filterbar nach **Alle / ESP32 / Raspberry Pi / Arduino**, jede mit **„⚡ Prototyp in 3D-Werkbank laden“**!
+  - **🔥 Löten (Interaktiver Löt-Trainer):** Virtuelle FR-4-Übungsplatine mit 8 Durchkontaktierungen, konfigurierbarer Lötstation (240–450 °C, Bleifrei 227 °C vs. Bleihaltig 183 °C, Flussmittel, Auto-/Leertasten-Zinnzufuhr), Live-Hitze-/Rauch-/Meniskus-Physik, automatischer Qualitätsbewertung (perfekt / kalt / Kugel / verbrannt) sowie den 5 Goldenen Lötregeln & Fehler-Diagnosekarten.
   - **⭐ Favoriten (Persistent im Browser gespeichert):** Überall per **`★`** Lieblings-Sensoren, Aktoren, Lektionen, Bauprojekte und Funny-Ideen merken und in der eigenen Favoriten-Rubrik mit einem Klick wieder öffnen.
 - **Interaktive 3D-Szene (Three.js + OrbitControls):**
   - Maßstabsgetreue 3D-Bauteile mit weichen Schatten, Live-LED-Glow (`emissiveIntensity`, additiver Halo, `PointLight`), automatisch aktualisierten 4-Band-Widerstandsfarbringen (IEC 60062), klickbarem 3D-Taster, drehendem SG90-Servo-Arm, 24-GHz-HLK-LD2490-Radarwellen, Mean Well 5V-Netzteil/Akku-Pack, flexiblen WS2812B-WLED-Streifen, rotierendem 5-V-Axiallüfter und selbstleuchtendem 0,96"-SSD1306-OLED-Display.
@@ -34,7 +35,9 @@ Eine interaktive 3D-Web-App zum praxisnahen Lernen von Elektronik, GPIO-Grundlag
 
 ---
 
-## Übersicht der 19 interaktiven Lektionen
+## Übersicht der interaktiven Lektionen (65 gesamt)
+
+Zusätzlich zu den **19 Kern-Lektionen** unten enthält die Plattform **40 erweiterte Praxis-Lektionen** (Arduino Praxis, Smart Home & IoT, Raspberry Pi, Sensoren & Aktoren) sowie **6 frei konfigurierbare Netzteil- & Akku-Labs** (`60`–`65`: Labornetzteil mit CC/CV, 18650 1S–4S Pack, LiPo-ESP-Laufzeit, Buck-Wandler vs. LM7805, Solar-USV, USB-C PD 5 V/5 A für Pi 5).
 
 | Nr. | Kategorie | Lektion | Schwerpunkte |
 | --- | --- | --- | --- |

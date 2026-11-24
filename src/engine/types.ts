@@ -12,6 +12,14 @@ export type WledEffectId = 'rainbow' | 'chase' | 'solid-white' | 'fire' | 'breat
 
 export type WledPowerSourceId = 'meanwell-psu' | 'meanwell-battery';
 
+export type PowerLabMode =
+  | 'bench-psu'
+  | 'liion-18650'
+  | 'lipo-pack'
+  | 'buck-12v-5v'
+  | 'solar-ups'
+  | 'usb-pd';
+
 export type EspBoardId =
   | 'esp32-devkit-v1'
   | 'esp32-c3-supermini'
@@ -50,7 +58,8 @@ export type CircuitTopologyId =
   | 'wled-long-injection'
   | 'pi-traffic-light'
   | 'pi-fan-pwm'
-  | 'pi-oled-i2c';
+  | 'pi-oled-i2c'
+  | 'power-supply-lab';
 
 export type ComponentCategory = 'mcu' | 'passive' | 'active' | 'input' | 'sensor' | 'board';
 
@@ -256,6 +265,17 @@ export interface CircuitParameters {
   // 19: Raspberry Pi I2C OLED SSD1306
   piOledPage: 'system' | 'network' | 'gpio';
   piOledContrastPct: number; // 10..100 %
+
+  // 20+: Konfigurierbares Netzteil- & Akku-Labor
+  psuMode: PowerLabMode;
+  psuVoltageV: number; // 3.3 .. 24.0 V (bei Netzteil / Buck / USB-PD)
+  psuCurrentLimitA: number; // 0.5 .. 10.0 A
+  psuBatteryCells: number; // 1 .. 4 (1S..4S Li-Ion/LiPo)
+  psuBatteryCapacityMah: number; // 1000 .. 20000 mAh
+  psuBatterySocPct: number; // 5 .. 100 %
+  psuLoadMa: number; // 50 .. 5000 mA
+  psuRegulatorType: 'buck' | 'linear';
+  psuCableAwg: 18 | 22 | 26;
 }
 
 export interface CircuitWarning {

@@ -13,6 +13,7 @@ import type {
 import { formatEndpointLabel, getCatalogItem, normalizePartRow } from '../sandbox/SandboxEngine';
 import type {
   HighlightMarker,
+  SandboxPartType,
   SandboxSimSummary,
   SandboxState,
   SandboxToolId,
@@ -48,6 +49,23 @@ export interface SceneCallbacks {
   onSandboxEndpointClick?: (endpoint: WireEndpoint) => void;
   onSandboxDeleteItem?: (kind: 'part' | 'wire', id: string) => void;
   onSandboxPickPart?: (partId: string) => void;
+}
+
+interface SandboxPartHandle {
+  type: string;
+  led?: LedMesh;
+  rgbLed?: RgbLedMesh;
+  button?: ButtonMesh;
+  ldr?: LdrMesh;
+  bme280?: Bme280Mesh;
+  hcsr04?: UltrasonicMesh;
+  ld2490?: Ld2490Mesh;
+  oled?: OledDisplayMesh;
+  servo?: ServoMesh;
+  buzzer?: BuzzerMesh;
+  relay?: RelayModuleMesh;
+  fan?: CoolingFanMesh;
+  extra?: AnimatedSandboxExtra;
 }
 
 function createWorkbenchTexture(theme: ThemeMode): THREE.CanvasTexture {
@@ -182,28 +200,13 @@ export class SceneManager {
   private sandboxModeActive = false;
   private sandboxTool: SandboxToolId = 'place';
   private selectedMovePartId: string | null = null;
+  private hoverGhostPartType: SandboxPartType | null = null;
+  private lastHoverGhostKey = '';
   private readonly markerGroup = new THREE.Group();
   private readonly boardPinPadsGroup = new THREE.Group();
+  private readonly hoverGhostGroup = new THREE.Group();
   private readonly hoverSnapRing: THREE.Mesh;
-  private readonly sandboxPartHandles = new Map<
-    string,
-    {
-      type: string;
-      led?: LedMesh;
-      rgbLed?: RgbLedMesh;
-      button?: ButtonMesh;
-      ldr?: LdrMesh;
-      bme280?: Bme280Mesh;
-      hcsr04?: UltrasonicMesh;
-      ld2490?: Ld2490Mesh;
-      oled?: OledDisplayMesh;
-      servo?: ServoMesh;
-      buzzer?: BuzzerMesh;
-      relay?: RelayModuleMesh;
-      fan?: CoolingFanMesh;
-      extra?: AnimatedSandboxExtra;
-    }
-  >();
+  private readonly sandboxPartHandles = new Map<string, SandboxPartHandle>();
   private lastMarkerKey = '';
   private lastSandboxElapsed = 0;
 
@@ -299,6 +302,10 @@ export class SceneManager {
 
     this.boardPinPadsGroup.name = 'Sandbox_Board_Pins';
     this.scene.add(this.boardPinPadsGroup);
+
+    this.hoverGhostGroup.name = 'Sandbox_Hover_Ghost';
+    this.hoverGhostGroup.visible = false;
+    this.scene.add(this.hoverGhostGroup);
 
     this.hoverSnapRing = new THREE.Mesh(
       new THREE.RingGeometry(0.11, 0.17, 24),
@@ -507,6 +514,7 @@ export class SceneManager {
     this.boardPinPadsGroup.visible = false;
     this.markerGroup.visible = false;
     this.hoverSnapRing.visible = false;
+    this.hoverGhostGroup.visible = false;
 
     const boardChanged = this.swapEspBoardIfNeeded(params.boardId);
     const removedKey = [...params.removedParts].sort().join(',');
@@ -521,6 +529,9 @@ export class SceneManager {
       params.wledPowerInjection,
       params.wledPowerSource,
       Math.round(params.wledBatteryCapacityMah / 1000),
+      params.psuMode,
+      params.psuRegulatorType,
+      Math.round(params.psuBatteryCapacityMah / 1000),
       wledBucket,
       removedKey,
     ].join(':');
@@ -630,6 +641,32 @@ export class SceneManager {
         break;
       case 'pi-oled-i2c':
         this.activeOled?.updateScreen(result.piOledLines, params.piOledContrastPct);
+        break;
+      case 'power-supply-lab':
+        this.activeMeanWell?.updateBatteryVisuals(
+          params.psuBatterySocPct,
+          !params.removedParts.includes('meanwell-power'),
+        );
+        this.activeLed?.updateVisuals(
+          result.isCriticalOvercurrent ? 'red' : result.isOvercurrent ? 'yellow' : 'green',
+          result.ledBrightnessPercent,
+          result.isOvercurrent,
+          result.isCriticalOvercurrent,
+          result.timestamp,
+        );
+        this.activeOled?.updateScreen(
+          params.removedParts.includes('meanwell-power')
+            ? []
+            : [
+                params.psuMode.toUpperCase(),
+                `U = ${result.nodeVoltage.toFixed(2)} V`,
+                `I = ${Math.round(result.currentMa)} mA`,
+                result.wledBatteryRuntimeHours > 0
+                  ? `BAT: ${result.wledBatteryRuntimeHours.toFixed(1)}h`
+                  : `P = ${(result.powerMw / 1000).toFixed(2)} W`,
+              ],
+          95,
+        );
         break;
     }
   }
@@ -1613,11 +1650,303 @@ export class SceneManager {
         });
         break;
       }
+
+      case 'power-supply-lab': {
+        const isBat =
+          params.psuMode === 'liion-18650' ||
+          params.psuMode === 'lipo-pack' ||
+          params.psuMode === 'solar-ups';
+        this.activeMeanWell = new MeanWellPowerMesh(
+          isBat ? 'meanwell-battery' : 'meanwell-psu',
+          params.psuBatteryCapacityMah,
+          params.psuBatterySocPct,
+        );
+        this.activeMeanWell.group.position.set(-8.65, 0.04, 0.55);
+        this.registerPart(this.activeMeanWell.group, {
+          partId: 'meanwell-power',
+          name: isBat
+            ? `${params.psuBatteryCells}S Akku-Pack (${Math.round(params.psuBatteryCapacityMah / 1000)} Ah)`
+            : `Konfigurierbares Netzteil (${params.psuVoltageV.toFixed(1).replace('.', ',')} V / ${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A)`,
+          categoryLabel: isBat ? 'Akku-Pack & BMS' : 'Labor-/Schaltnetzteil',
+          description:
+            'Konfigurierbare Stromquelle — ändere Spannung, Zellenanzahl, Stromlimit, Regler & AWG-Kabel rechts im Inspector!',
+          specLine: 'Klicken zum Trennen / Anschließen',
+          removable: true,
+          isRemoved: isRem('meanwell-power'),
+        });
+
+        this.addWire(this.activeMeanWell.getVPosWorld(), hole(2, '+top'), 0xef4444, 2.25, -0.75);
+        this.addWire(this.activeMeanWell.getGndWorld(), hole(2, '-top'), 0x1e293b, 2.55, -1.05);
+
+        // 1000 uF Stützkondensator
+        const cap = new CapacitorMesh(hole(5, '+top'), hole(5, '-top'));
+        this.registerPart(cap.group, {
+          partId: 'buffer-cap',
+          name: '1000 µF Stütz- & Glättungs-Elko',
+          categoryLabel: 'Spannungs-Filter',
+          description:
+            'Glättet Spannungswelligkeit (Ripple) und puffert Lastspitzen. Entfernen zeigt sofort Ripple im Oszilloskop!',
+          specLine: '1000 µF / 25 V · Klicken zum Entfernen',
+          removable: true,
+          isRemoved: isRem('buffer-cap'),
+        });
+
+        // Spannungsregler / Buck-MOSFET Stufe
+        const reg = new MosfetMesh([hole(9, 'g'), hole(11, 'g'), hole(13, 'g')]);
+        this.registerPart(reg.group, {
+          partId: 'regulator-stage',
+          name:
+            params.psuRegulatorType === 'buck'
+              ? 'Step-Down Buck-Wandler (~90 % Wirkungsgrad)'
+              : 'Linearregler LM7805 (verheizt Spannungsdifferenz!)',
+          categoryLabel: 'Spannungsregler',
+          description:
+            'Regelt die Eingangsspannung auf die Zielspannung herunter. Vergleiche rechts im Inspector Buck vs. Linear!',
+          specLine: params.psuRegulatorType === 'buck' ? 'Schaltregler ~90 % η' : 'Linearregler (Abwärme!)',
+          removable: false,
+          isRemoved: false,
+        });
+        this.addWire(hole(9, 'j'), hole(9, '+top'), 0xef4444, 0.85, 0);
+        this.addWire(hole(13, 'j'), hole(13, '-top'), 0x1e293b, 0.85, 0);
+
+        // OLED Live-Power-Monitor auf dem Steckbrett!
+        this.activeOled = new OledDisplayMesh([
+          hole(16, 'f'),
+          hole(17, 'f'),
+          hole(18, 'f'),
+          hole(19, 'f'),
+        ]);
+        this.registerPart(this.activeOled.group, {
+          partId: 'power-oled',
+          name: 'Live-Power-Monitor (INA219 + OLED)',
+          categoryLabel: 'Messgerät',
+          description: 'Zeigt live Ausgangsspannung, Laststrom, Leistung & Akku-Restlaufzeit.',
+          specLine: 'Echtzeit-Telemetrie',
+          removable: false,
+          isRemoved: false,
+        });
+        this.addWire(hole(16, 'j'), hole(16, '-top'), 0x1e293b, 0.8, 0);
+        this.addWire(hole(17, 'j'), hole(17, '+top'), 0xef4444, 0.8, 0);
+        this.addWire(rolePin('scl'), hole(18, 'i'), 0xfacc15, 1.55, -0.45);
+        this.addWire(rolePin('sda'), hole(19, 'h'), 0x38bdf8, 1.75, -0.75);
+
+        // Last-Indikator-LED + Lastwiderstand
+        this.dynamicCircuitGroup.add(new ResistorMesh(hole(22, 'h'), hole(26, 'h'), 220).group);
+        this.activeLed = new LedMesh(hole(26, 'g'), hole(28, 'g'));
+        this.registerPart(this.activeLed.group, {
+          partId: 'load-indicator',
+          name: 'Simulierte Last & Status-LED',
+          categoryLabel: 'Verbraucher',
+          description: 'Grün = stabil, Gelb = Strombegrenzung, Rot = Regler-Überhitzung!',
+          specLine: `Laststrom: ${Math.round(params.psuLoadMa)} mA`,
+          removable: false,
+          isRemoved: false,
+        });
+        this.addWire(hole(22, 'j'), hole(22, '+top'), 0xef4444, 0.85, 0);
+        this.addWire(hole(28, 'j'), hole(28, '-top'), 0x1e293b, 0.85, 0);
+        break;
+      }
     }
   }
 
   public setSandboxTool(tool: SandboxToolId): void {
     this.sandboxTool = tool;
+    if (tool === 'wire' || tool === 'delete') {
+      this.hoverGhostGroup.visible = false;
+    }
+  }
+
+  public setSandboxGhostPartType(type: SandboxPartType | null): void {
+    if (this.hoverGhostPartType === type) return;
+    this.hoverGhostPartType = type;
+    this.lastHoverGhostKey = '';
+    if (!type) {
+      this.hoverGhostGroup.visible = false;
+    }
+  }
+
+  private buildSandboxPartVisual(
+    type: SandboxPartType,
+    col: number,
+    effectiveRow: string,
+    registerLiveHandles: boolean,
+  ): {
+    group: THREE.Group | null;
+    handle: SandboxPartHandle;
+    pins: THREE.Vector3[];
+  } {
+    const hole = (c: number, r: string) =>
+      this.breadboard.getWorldHolePosition(Math.max(1, Math.min(30, c)), r);
+    const def = getCatalogItem(type);
+    const pins = def.pinOffsets.map((po) => hole(col + po.dCol, effectiveRow));
+    const partCenter = hole(col + Math.floor(def.colSpan / 2), effectiveRow);
+    let group: THREE.Group | null = null;
+    const handle: SandboxPartHandle = { type };
+
+    switch (type) {
+      case 'led-red':
+      case 'led-green':
+      case 'led-blue':
+      case 'led-yellow': {
+        const led = new LedMesh(pins[0], pins[1]);
+        handle.led = led;
+        group = led.group;
+        break;
+      }
+      case 'led-rgb': {
+        const rgb = new RgbLedMesh(pins);
+        handle.rgbLed = rgb;
+        group = rgb.group;
+        break;
+      }
+      case 'resistor-220':
+      case 'resistor-10k': {
+        const r = new ResistorMesh(pins[0], pins[1], type === 'resistor-220' ? 220 : 10000);
+        group = r.group;
+        break;
+      }
+      case 'mosfet-irlz44n': {
+        const m = new MosfetMesh(pins);
+        group = m.group;
+        break;
+      }
+      case 'button': {
+        const btn = new ButtonMesh(partCenter);
+        handle.button = btn;
+        if (registerLiveHandles) this.activeButton = btn;
+        group = btn.group;
+        break;
+      }
+      case 'capacitor': {
+        const cap = new CapacitorMesh(pins[0], pins[1]);
+        group = cap.group;
+        break;
+      }
+      case 'ldr': {
+        const ldr = new LdrMesh(pins[0], pins[1]);
+        handle.ldr = ldr;
+        group = ldr.group;
+        break;
+      }
+      case 'bme280': {
+        const bme = new Bme280Mesh(pins);
+        handle.bme280 = bme;
+        group = bme.group;
+        break;
+      }
+      case 'hcsr04': {
+        const us = new UltrasonicMesh(pins);
+        handle.hcsr04 = us;
+        group = us.group;
+        break;
+      }
+      case 'ld2490': {
+        const ld = new Ld2490Mesh(pins);
+        handle.ld2490 = ld;
+        group = ld.group;
+        break;
+      }
+      case 'oled': {
+        const oled = new OledDisplayMesh(pins);
+        handle.oled = oled;
+        group = oled.group;
+        break;
+      }
+      case 'servo': {
+        const srv = new ServoMesh(partCenter);
+        handle.servo = srv;
+        if (registerLiveHandles) this.activeServo = srv;
+        group = srv.group;
+        break;
+      }
+      case 'buzzer': {
+        const bz = new BuzzerMesh(pins[0], pins[1]);
+        handle.buzzer = bz;
+        group = bz.group;
+        break;
+      }
+      case 'relay-module': {
+        const rel = new RelayModuleMesh(partCenter);
+        handle.relay = rel;
+        group = rel.group;
+        break;
+      }
+      case 'cooling-fan': {
+        const fan = new CoolingFanMesh(partCenter);
+        handle.fan = fan;
+        if (registerLiveHandles) this.activeCoolingFan = fan;
+        group = fan.group;
+        break;
+      }
+      default: {
+        const extra = createSandboxExtraMesh(type, pins);
+        handle.extra = extra;
+        group = extra.group;
+        break;
+      }
+    }
+
+    return { group, handle, pins };
+  }
+
+  private updateHoverGhost(type: SandboxPartType, rawCol: number, rawRow: string): void {
+    const def = getCatalogItem(type);
+    const col = Math.max(1, Math.min(30 - def.colSpan, Math.round(rawCol - def.colSpan / 2)));
+    const effectiveRow = normalizePartRow(rawRow);
+    const key = `${type}:${col}:${effectiveRow}`;
+    if (key === this.lastHoverGhostKey) {
+      this.hoverGhostGroup.visible = true;
+      return;
+    }
+    this.lastHoverGhostKey = key;
+
+    while (this.hoverGhostGroup.children.length > 0) {
+      this.hoverGhostGroup.remove(this.hoverGhostGroup.children[0]);
+    }
+
+    const { group, pins } = this.buildSandboxPartVisual(type, col, effectiveRow, false);
+    if (group) {
+      group.position.y += 0.04;
+      group.traverse((child) => {
+        // Ghost darf niemals Raycasting blockieren!
+        child.raycast = () => {};
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          const cloned = mats.map((m) => {
+            const c = m.clone() as THREE.MeshStandardMaterial;
+            c.transparent = true;
+            c.opacity = 0.58;
+            c.depthWrite = false;
+            if ('emissive' in c && c.emissive) {
+              c.emissive = new THREE.Color('#06b6d4');
+              c.emissiveIntensity = 0.32;
+            }
+            return c;
+          });
+          mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
+        }
+      });
+      this.hoverGhostGroup.add(group);
+    }
+
+    // Leuchtende Pin-Fußabdruck-Ringe exakt auf den Ziel-Löchern des Steckbretts!
+    const pinRingGeo = new THREE.RingGeometry(0.055, 0.115, 16);
+    const pinRingMat = new THREE.MeshBasicMaterial({
+      color: 0x22d3ee,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.92,
+    });
+    for (const p of pins) {
+      const r = new THREE.Mesh(pinRingGeo, pinRingMat);
+      r.rotation.x = -Math.PI / 2;
+      r.position.set(p.x, p.y + 0.045, p.z);
+      r.raycast = () => {};
+      this.hoverGhostGroup.add(r);
+    }
+
+    this.hoverGhostGroup.visible = true;
   }
 
   private resolveEndpointWorld(ep: WireEndpoint): THREE.Vector3 {
@@ -1853,121 +2182,11 @@ export class SceneManager {
   private rebuildSandboxScene(state: SandboxState): void {
     this.clearDynamicCircuit();
     this.sandboxPartHandles.clear();
-    const hole = (col: number, row: string) =>
-      this.breadboard.getWorldHolePosition(Math.max(1, Math.min(30, col)), row);
 
     for (const part of state.parts) {
       const def = getCatalogItem(part.type);
       const effectiveRow = normalizePartRow(part.row);
-      const pins = def.pinOffsets.map((po) => hole(part.col + po.dCol, effectiveRow));
-      const partCenter = hole(part.col + Math.floor(def.colSpan / 2), effectiveRow);
-      let group: THREE.Group | null = null;
-      const handle: NonNullable<ReturnType<typeof this.sandboxPartHandles.get>> = {
-        type: part.type,
-      };
-
-      switch (part.type) {
-        case 'led-red':
-        case 'led-green':
-        case 'led-blue':
-        case 'led-yellow': {
-          const led = new LedMesh(pins[0], pins[1]);
-          handle.led = led;
-          group = led.group;
-          break;
-        }
-        case 'led-rgb': {
-          const rgb = new RgbLedMesh(pins);
-          handle.rgbLed = rgb;
-          group = rgb.group;
-          break;
-        }
-        case 'resistor-220':
-        case 'resistor-10k': {
-          const r = new ResistorMesh(pins[0], pins[1], part.type === 'resistor-220' ? 220 : 10000);
-          group = r.group;
-          break;
-        }
-        case 'mosfet-irlz44n': {
-          const m = new MosfetMesh(pins);
-          group = m.group;
-          break;
-        }
-        case 'button': {
-          const btn = new ButtonMesh(partCenter);
-          handle.button = btn;
-          this.activeButton = btn;
-          group = btn.group;
-          break;
-        }
-        case 'capacitor': {
-          const cap = new CapacitorMesh(pins[0], pins[1]);
-          group = cap.group;
-          break;
-        }
-        case 'ldr': {
-          const ldr = new LdrMesh(pins[0], pins[1]);
-          handle.ldr = ldr;
-          group = ldr.group;
-          break;
-        }
-        case 'bme280': {
-          const bme = new Bme280Mesh(pins);
-          handle.bme280 = bme;
-          group = bme.group;
-          break;
-        }
-        case 'hcsr04': {
-          const us = new UltrasonicMesh(pins);
-          handle.hcsr04 = us;
-          group = us.group;
-          break;
-        }
-        case 'ld2490': {
-          const ld = new Ld2490Mesh(pins);
-          handle.ld2490 = ld;
-          group = ld.group;
-          break;
-        }
-        case 'oled': {
-          const oled = new OledDisplayMesh(pins);
-          handle.oled = oled;
-          group = oled.group;
-          break;
-        }
-        case 'servo': {
-          const srv = new ServoMesh(partCenter);
-          handle.servo = srv;
-          this.activeServo = srv;
-          group = srv.group;
-          break;
-        }
-        case 'buzzer': {
-          const bz = new BuzzerMesh(pins[0], pins[1]);
-          handle.buzzer = bz;
-          group = bz.group;
-          break;
-        }
-        case 'relay-module': {
-          const rel = new RelayModuleMesh(partCenter);
-          handle.relay = rel;
-          group = rel.group;
-          break;
-        }
-        case 'cooling-fan': {
-          const fan = new CoolingFanMesh(partCenter);
-          handle.fan = fan;
-          this.activeCoolingFan = fan;
-          group = fan.group;
-          break;
-        }
-        default: {
-          const extra = createSandboxExtraMesh(part.type, pins);
-          handle.extra = extra;
-          group = extra.group;
-          break;
-        }
-      }
+      const { group, handle } = this.buildSandboxPartVisual(part.type, part.col, effectiveRow, true);
 
       if (group) {
         const hoverInfo: HoverPartInfo = {
@@ -2102,6 +2321,10 @@ export class SceneManager {
     this.activeButton?.setHovered(hitBtn);
 
     if (this.sandboxModeActive && this.sandboxTool !== 'delete') {
+      const showGhost =
+        this.hoverGhostPartType !== null &&
+        (this.sandboxTool === 'place' ||
+          (this.sandboxTool === 'move' && this.selectedMovePartId !== null));
       const showSnap =
         this.sandboxTool === 'place' ||
         this.sandboxTool === 'wire' ||
@@ -2115,15 +2338,24 @@ export class SceneManager {
               : ep;
           const pos = this.resolveEndpointWorld(snapEp);
           this.hoverSnapRing.position.set(pos.x, pos.y + 0.05, pos.z);
-          this.hoverSnapRing.visible = true;
+          this.hoverSnapRing.visible = !showGhost;
+
+          if (showGhost && ep.kind === 'breadboard' && ep.col !== undefined && this.hoverGhostPartType) {
+            this.updateHoverGhost(this.hoverGhostPartType, ep.col, ep.row ?? 'g');
+          } else {
+            this.hoverGhostGroup.visible = false;
+          }
         } else {
           this.hoverSnapRing.visible = false;
+          this.hoverGhostGroup.visible = false;
         }
       } else {
         this.hoverSnapRing.visible = false;
+        this.hoverGhostGroup.visible = false;
       }
     } else {
       this.hoverSnapRing.visible = false;
+      this.hoverGhostGroup.visible = false;
     }
 
     const hoverInfo = this.getHoverTarget(e.clientX, e.clientY);
@@ -2150,6 +2382,8 @@ export class SceneManager {
 
   private readonly onPointerLeave = (): void => {
     this.activeButton?.setHovered(false);
+    this.hoverSnapRing.visible = false;
+    this.hoverGhostGroup.visible = false;
     this.callbacks.onHoverPartChange?.(null, 0, 0);
   };
 

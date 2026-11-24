@@ -674,6 +674,43 @@ export function renderFritzingSvg(
       `;
       break;
     }
+
+    case 'power-supply-lab': {
+      const isBat =
+        params.psuMode === 'liion-18650' ||
+        params.psuMode === 'lipo-pack' ||
+        params.psuMode === 'solar-ups';
+      const mwRem = isRem('meanwell-power');
+      espPins = [
+        { y: 112, label: '5V / VIN', color: '#f87171' },
+        { y: 185, label: `SDA G${p.sda.gpio}`, color: '#38bdf8' },
+        { y: 235, label: `SCL G${p.scl.gpio}`, color: '#facc15' },
+        { y: 292, label: 'GND', color: '#94a3b8' },
+      ];
+      bodySvg = `
+        <g opacity="${mwRem ? 0.38 : 1}">
+          <rect x="242" y="66" width="160" height="82" rx="8" fill="#cbd5e1" stroke="#475569" stroke-width="2" />
+          <rect x="242" y="66" width="160" height="24" rx="6" fill="#0f172a" />
+          <text x="322" y="82" text-anchor="middle" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#38bdf8">${isBat ? `${params.psuBatteryCells}S AKKU-PACK` : 'KONFIG. NETZTEIL'}</text>
+          <text x="322" y="112" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="700" fill="#0f172a">${isBat ? `${params.psuBatteryCapacityMah} mAh · ${Math.round(params.psuBatterySocPct)}%` : `${params.psuVoltageV.toFixed(1)} V · max ${params.psuCurrentLimitA.toFixed(1)} A`}</text>
+          <text x="322" y="132" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9.5" fill="#1e40af">AWG ${params.psuCableAwg} · ${params.psuRegulatorType.toUpperCase()}</text>
+        </g>
+        ${mwRem ? removedOverlay(242, 66, 160, 82) : ''}
+        ${wire([[402, 102], [472, 102]], '#ef4444', mwRem)}
+        ${wire([[402, 132], [430, 132], [430, 292], [190, 292]], gndWire, mwRem)}
+        ${wire([[242, 112], [190, 112]], '#ef4444', mwRem)}
+        <rect x="472" y="76" width="118" height="58" rx="7" fill="#181c24" stroke="${params.psuRegulatorType === 'buck' ? '#10b981' : '#f59e0b'}" stroke-width="2" />
+        <text x="531" y="100" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="700" fill="#f8fafc">${params.psuRegulatorType === 'buck' ? 'BUCK DC-DC' : 'LM7805 LIN'}</text>
+        <text x="531" y="120" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9.5" fill="#38bdf8">${result.nodeVoltage.toFixed(2)} V OUT</text>
+        ${svgCapacitor(531, 218, '1000 µF', isRem('buffer-cap'), textCol)}
+        ${wire([[590, 102], [650, 102], [650, 185]], '#ef4444', mwRem)}
+        ${wire([[650, 240], [650, 292], [430, 292]], gndWire, mwRem)}
+        <rect x="615" y="185" width="120" height="55" rx="8" fill="#0f172a" stroke="#22d3ee" stroke-width="2" />
+        <text x="675" y="208" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="#e2e8f0">LAST ${Math.round(result.currentMa)} mA</text>
+        <text x="675" y="226" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="#38bdf8">${(result.powerMw / 1000).toFixed(2)} W</text>
+      `;
+      break;
+    }
   }
 
   return `

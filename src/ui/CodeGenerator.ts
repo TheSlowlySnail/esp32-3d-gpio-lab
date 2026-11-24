@@ -426,6 +426,31 @@ while True:
         draw.text((2, 50), "I2C 0x3C OK", fill="white")
     time.sleep(1)`;
     }
+
+    case 'power-supply-lab': {
+      return `// ${board.name} — Netzteil- & Akku-Monitor (${params.psuMode})
+// Live-Werte: U = ${result.nodeVoltage.toFixed(2)} V | I = ${Math.round(result.currentMa)} mA | P = ${(result.powerMw / 1000).toFixed(2)} W
+// Regler: ${params.psuRegulatorType === 'buck' ? 'Step-Down Buck (~90 %)' : 'Linearregler LM7805'} | Kabel: AWG ${params.psuCableAwg}
+
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+Adafruit_INA219 ina219;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(${p.sda.gpio}, ${p.scl.gpio});
+  ina219.begin();
+}
+
+void loop() {
+  float busV = ina219.getBusVoltage_V();
+  float currentMa = ina219.getCurrent_mA();
+  float powerMw = ina219.getPower_mW();
+  Serial.printf("U=%.2fV | I=%.0fmA | P=%.2fW\\n", busV, currentMa, powerMw / 1000.0f);
+  delay(500);
+}`;
+    }
   }
 }
 
@@ -766,6 +791,26 @@ dtparam=i2c_arm_baudrate=400000
 # Verkabelung:
 #   VCC -> 3,3V (Pin 1) | GND -> Pin 6
 #   SDA -> GPIO ${p.sda.gpio} | SCL -> GPIO ${p.scl.gpio}`;
+    }
+
+    case 'power-supply-lab': {
+      return `# ${board.name} — Netzteil- & Akku-Telemetrie (INA219 in ESPHome)
+esphome:
+  name: power-monitor-${board.id}
+
+${espBlock}
+
+i2c:
+  sda: GPIO${p.sda.gpio}
+  scl: GPIO${p.scl.gpio}
+
+sensor:
+  - platform: ina219
+    address: 0x40
+    bus_voltage: { name: "Ausgangsspannung" }
+    current: { name: "Laststrom" }
+    power: { name: "Leistung" }
+    update_interval: 2s`;
     }
   }
 }

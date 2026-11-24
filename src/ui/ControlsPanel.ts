@@ -82,6 +82,10 @@ export class ControlsPanel {
       params.piTrafficAuto,
       params.piFanAutoMode,
       params.piOledPage,
+      params.psuMode,
+      params.psuRegulatorType,
+      params.psuCableAwg,
+      params.psuBatteryCells,
       removedKey,
     ].join(':');
 
@@ -808,10 +812,143 @@ export class ControlsPanel {
           </div>
         `;
       }
+
+      case 'power-supply-lab': {
+        const isBat =
+          params.psuMode === 'liion-18650' ||
+          params.psuMode === 'lipo-pack' ||
+          params.psuMode === 'solar-ups';
+        const modes: Array<{ id: CircuitParameters['psuMode']; label: string }> = [
+          { id: 'bench-psu', label: 'Labor-NT' },
+          { id: 'liion-18650', label: '18650 Akku' },
+          { id: 'lipo-pack', label: 'LiPo 3,7V' },
+          { id: 'buck-12v-5v', label: 'Buck 12→5V' },
+          { id: 'solar-ups', label: 'Solar-USV' },
+          { id: 'usb-pd', label: 'USB-C PD' },
+        ];
+        return `
+          <div>
+            <div class="text-xs eng-text-body mb-1.5">Stromquelle / Typ konfigurieren</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              ${modes
+                .map(
+                  (m) =>
+                    `<button type="button" data-psu-mode="${m.id}" class="py-1.5 px-1.5 rounded-lg border text-[11px] font-semibold cursor-pointer ${
+                      params.psuMode === m.id
+                        ? 'bg-cyan-500/18 border-cyan-500 eng-text-accent'
+                        : 'eng-btn-neutral'
+                    }">${m.label}</button>`,
+                )
+                .join('')}
+            </div>
+          </div>
+
+          ${
+            isBat
+              ? `
+                <div>
+                  <div class="text-xs eng-text-body mb-1.5">Akku-Zellen in Reihe (1S–4S)</div>
+                  <div class="grid grid-cols-4 gap-1.5">
+                    ${[1, 2, 3, 4]
+                      .map(
+                        (c) =>
+                          `<button type="button" data-psu-cells="${c}" class="py-1.5 rounded-lg border text-xs font-mono font-semibold cursor-pointer ${
+                            params.psuBatteryCells === c
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                              : 'eng-btn-neutral'
+                          }">${c}S (${(c * 3.7).toFixed(1).replace('.', ',')}V)</button>`,
+                      )
+                      .join('')}
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5">
+                    <span class="eng-text-body">Akku-Kapazität</span>
+                    <span data-val="psu-cap" class="font-mono eng-text-accent tabular-nums">${params.psuBatteryCapacityMah} mAh</span>
+                  </div>
+                  <input data-ctrl="psu-cap" type="range" min="1000" max="20000" step="500" value="${params.psuBatteryCapacityMah}" class="eng-slider" />
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5">
+                    <span class="eng-text-body">Ladezustand (SoC)</span>
+                    <span data-val="psu-soc" class="font-mono eng-text-accent tabular-nums">${Math.round(params.psuBatterySocPct)} %</span>
+                  </div>
+                  <input data-ctrl="psu-soc" type="range" min="5" max="100" step="1" value="${Math.round(params.psuBatterySocPct)}" class="eng-slider" />
+                </div>
+              `
+              : `
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5">
+                    <span class="eng-text-body">Eingangs-/Netzteil-Spannung</span>
+                    <span data-val="psu-v" class="font-mono eng-text-accent tabular-nums">${params.psuVoltageV.toFixed(1).replace('.', ',')} V</span>
+                  </div>
+                  <input data-ctrl="psu-v" type="range" min="3.3" max="24" step="0.1" value="${params.psuVoltageV.toFixed(1)}" class="eng-slider" />
+                  <div class="flex flex-wrap gap-1 mt-1.5">
+                    ${[3.3, 5, 9, 12, 15, 24]
+                      .map(
+                        (v) =>
+                          `<button type="button" data-psu-vpreset="${v}" class="eng-btn-neutral px-2 py-0.5 rounded border text-[10.5px] font-mono cursor-pointer">${String(v).replace('.', ',')} V</button>`,
+                      )
+                      .join('')}
+                  </div>
+                </div>
+              `
+          }
+
+          <div>
+            <div class="flex justify-between text-xs mb-1.5">
+              <span class="eng-text-body">Strombegrenzung (CC-Limit)</span>
+              <span data-val="psu-limit" class="font-mono eng-text-accent tabular-nums">${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A</span>
+            </div>
+            <input data-ctrl="psu-limit" type="range" min="0.5" max="10" step="0.1" value="${params.psuCurrentLimitA.toFixed(1)}" class="eng-slider" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1.5">
+              <span class="eng-text-body">Verbraucher-Laststrom</span>
+              <span data-val="psu-load" class="font-mono eng-text-accent tabular-nums">${Math.round(params.psuLoadMa)} mA</span>
+            </div>
+            <input data-ctrl="psu-load" type="range" min="50" max="5000" step="50" value="${Math.round(params.psuLoadMa)}" class="eng-slider" />
+          </div>
+
+          <div>
+            <div class="text-xs eng-text-body mb-1.5">Spannungsregler-Typ</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" data-psu-reg="buck" class="py-1.5 px-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                params.psuRegulatorType === 'buck'
+                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                  : 'eng-btn-neutral'
+              }">⚡ Buck (~90 % η)</button>
+              <button type="button" data-psu-reg="linear" class="py-1.5 px-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                params.psuRegulatorType === 'linear'
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                  : 'eng-btn-neutral'
+              }">🔥 Linear (LM7805)</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs eng-text-body mb-1.5">Kabelquerschnitt (2 m Leitung)</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              ${([18, 22, 26] as const)
+                .map(
+                  (awg) =>
+                    `<button type="button" data-psu-awg="${awg}" class="py-1.5 px-2 rounded-lg border text-[11px] font-mono font-semibold cursor-pointer ${
+                      params.psuCableAwg === awg
+                        ? 'bg-cyan-500/18 border-cyan-500 eng-text-accent'
+                        : 'eng-btn-neutral'
+                    }">AWG ${awg} ${awg === 18 ? '(Dick)' : awg === 22 ? '(Std)' : '(Dünn)'}</button>`,
+                )
+                .join('')}
+            </div>
+          </div>
+        `;
+      }
     }
   }
 
   private bindEvents(lesson: LessonDefinition, params: CircuitParameters): void {
+    void lesson;
     const q = <T extends Element>(sel: string) => this.container.querySelector<T>(sel);
     const qAll = <T extends Element>(sel: string) => this.container.querySelectorAll<T>(sel);
 
@@ -826,7 +963,7 @@ export class ControlsPanel {
       this.callbacks.onRestoreAllParts(),
     );
 
-    switch (lesson.id) {
+    switch (params.topology) {
       case 'led-resistor':
         q('[data-ctrl="gpio-toggle"]')?.addEventListener('click', () =>
           this.callbacks.onParamsChange({ gpioOutputHigh: !params.gpioOutputHigh }),
@@ -1107,6 +1244,55 @@ export class ControlsPanel {
           this.callbacks.onParamsChange({ piOledContrastPct: Number((e.target as HTMLInputElement).value) }),
         );
         break;
+
+      case 'power-supply-lab':
+        qAll<HTMLButtonElement>('[data-psu-mode]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({
+              psuMode: b.dataset.psuMode as CircuitParameters['psuMode'],
+            }),
+          ),
+        );
+        qAll<HTMLButtonElement>('[data-psu-cells]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({ psuBatteryCells: Number(b.dataset.psuCells) }),
+          ),
+        );
+        q<HTMLInputElement>('[data-ctrl="psu-cap"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ psuBatteryCapacityMah: Number((e.target as HTMLInputElement).value) }),
+        );
+        q<HTMLInputElement>('[data-ctrl="psu-soc"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ psuBatterySocPct: Number((e.target as HTMLInputElement).value) }),
+        );
+        q<HTMLInputElement>('[data-ctrl="psu-v"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ psuVoltageV: Number((e.target as HTMLInputElement).value) }),
+        );
+        qAll<HTMLButtonElement>('[data-psu-vpreset]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({ psuVoltageV: Number(b.dataset.psuVpreset) }),
+          ),
+        );
+        q<HTMLInputElement>('[data-ctrl="psu-limit"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ psuCurrentLimitA: Number((e.target as HTMLInputElement).value) }),
+        );
+        q<HTMLInputElement>('[data-ctrl="psu-load"]')?.addEventListener('input', (e) =>
+          this.callbacks.onParamsChange({ psuLoadMa: Number((e.target as HTMLInputElement).value) }),
+        );
+        qAll<HTMLButtonElement>('[data-psu-reg]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({
+              psuRegulatorType: b.dataset.psuReg as 'buck' | 'linear',
+            }),
+          ),
+        );
+        qAll<HTMLButtonElement>('[data-psu-awg]').forEach((b) =>
+          b.addEventListener('click', () =>
+            this.callbacks.onParamsChange({
+              psuCableAwg: Number(b.dataset.psuAwg) as 18 | 22 | 26,
+            }),
+          ),
+        );
+        break;
     }
   }
 
@@ -1309,6 +1495,15 @@ export class ControlsPanel {
 
       case 'pi-oled-i2c':
         setText('[data-val="oled-contrast"]', `${Math.round(params.piOledContrastPct)} %`);
+        break;
+
+      case 'power-supply-lab':
+        setText('[data-val="psu-v"]', `${params.psuVoltageV.toFixed(1).replace('.', ',')} V`);
+        setSlider('[data-ctrl="psu-v"]', Number(params.psuVoltageV.toFixed(1)));
+        setText('[data-val="psu-cap"]', `${params.psuBatteryCapacityMah} mAh`);
+        setText('[data-val="psu-soc"]', `${Math.round(params.psuBatterySocPct)} %`);
+        setText('[data-val="psu-limit"]', `${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A`);
+        setText('[data-val="psu-load"]', `${Math.round(params.psuLoadMa)} mA`);
         break;
     }
   }

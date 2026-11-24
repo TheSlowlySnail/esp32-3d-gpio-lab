@@ -79,6 +79,8 @@ export class CircuitSolver {
         return this.solvePiFanPwm(params, elapsedSeconds);
       case 'pi-oled-i2c':
         return this.solvePiOledI2c(params, elapsedSeconds);
+      case 'power-supply-lab':
+        return this.solvePowerSupplyLab(params, elapsedSeconds);
     }
   }
 
@@ -1758,6 +1760,179 @@ export class CircuitSolver {
               whatHappens: `Das 0,96"-SSD1306-OLED zeigt live „${params.piOledPage.toUpperCase()}“-Daten mit ${Math.round(params.piOledContrastPct)} % Kontrast bei nur ${currentMa.toFixed(1).replace('.', ',')} mA.`,
               whyItHappens: 'Jedes Pixel des OLEDs leuchtet selbstständig (keine Hintergrundbeleuchtung nötig). Der Raspberry Pi überträgt die Bilddaten über nur 2 I²C-Leitungen (SDA/SCL). Tipp: Dunkle den Raum ab, um den Kontrast zu sehen!',
             },
+    });
+  }
+
+  // Konfigurierbares Netzteil- & Akku-Labor (CC/CV, 1S–4S Li-Ion/LiPo, Buck vs. Linear, AWG-Kabelabfall)
+  private solvePowerSupplyLab(params: CircuitParameters, t: number): SimulationResult {
+    const psuRemoved = isRemoved(params, 'meanwell-power');
+    const capRemoved = isRemoved(params, 'buffer-cap');
+    const isBatteryMode =
+      params.psuMode === 'liion-18650' ||
+      params.psuMode === 'lipo-pack' ||
+      params.psuMode === 'solar-ups';
+
+    const cells = clamp(Math.round(params.psuBatteryCells), 1, 4);
+    const cellV = 3.0 + (clamp(params.psuBatterySocPct, 5, 100) / 100) * 1.2; // 3.0V leer .. 4.2V voll
+    const sourceV = psuRemoved
+      ? 0
+      : isBatteryMode
+        ? cells * cellV
+        : clamp(params.psuVoltageV, 3.3, 24);
+
+    const limitMa = clamp(params.psuCurrentLimitA, 0.5, 10) * 1000;
+    const requestedMa = psuRemoved ? 0 : clamp(params.psuLoadMa, 50, 5000);
+    const inCurrentLimit = !psuRemoved && requestedMa > limitMa;
+    const actualMa = Math.min(requestedMa, limitMa);
+    const actualA = actualMa / 1000;
+
+    // Kabelwiderstand Hin- & Rückweg (2 m Leitung) nach AWG
+    const cableOhms = params.psuCableAwg === 18 ? 0.084 : params.psuCableAwg === 22 ? 0.212 : 0.536;
+    const cableDropV = actualA * cableOhms;
+
+    // Zielspannung nach Regler (5 V bei Buck/Linear/USB-PD/Solar, sonst Quellspannung)
+    const targetRegV =
+      params.psuMode === 'buck-12v-5v' ||
+      params.psuMode === 'solar-ups' ||
+      params.psuMode === 'usb-pd'
+        ? Math.min(5.0, sourceV)
+        : params.psuMode === 'lipo-pack'
+          ? Math.min(3.3, sourceV)
+          : sourceV;
+
+    const ccFactor = inCurrentLimit ? limitMa / requestedMa : 1;
+    const rippleV = capRemoved && !psuRemoved ? Math.sin(t * 90) * 0.28 : Math.sin(t * 90) * 0.02;
+    const loadVoltage = psuRemoved ? 0 : Math.max(0, (targetRegV - cableDropV) * ccFactor + rippleV);
+
+    // Wirkungsgrad & Abwärme (Buck ~90 % vs. Linearregler LM7805!)
+    const isLinear = params.psuRegulatorType === 'linear' && sourceV > targetRegV + 0.5;
+    const outPowerW = loadVoltage * actualA;
+    const heatLossW = psuRemoved
+      ? 0
+      : isLinear
+        ? Math.max(0, (sourceV - targetRegV) * actualA)
+        : outPowerW * 0.11;
+    const efficiencyPct =
+      outPowerW + heatLossW > 0.001 ? Math.round((outPowerW / (outPowerW + heatLossW)) * 100) : 0;
+
+    // Akkulaufzeit in Stunden
+    const usableMah = params.psuBatteryCapacityMah * (params.psuBatterySocPct / 100);
+    const inputDrawMa =
+      sourceV > 0.5 && efficiencyPct > 5
+        ? Math.max(10, (outPowerW / (sourceV * (efficiencyPct / 100))) * 1000)
+        : Math.max(10, actualMa);
+    const runtimeHours = isBatteryMode && !psuRemoved ? usableMah / inputDrawMa : 0;
+
+    const isThermalDanger = heatLossW > 1.8;
+    const isUndervoltage = !psuRemoved && (loadVoltage < targetRegV * 0.86 || (isBatteryMode && params.psuBatterySocPct <= 12));
+
+    const warnings: CircuitWarning[] = [];
+    if (psuRemoved) {
+      warnings.push({
+        severity: 'warning',
+        code: 'PSU_OFF',
+        title: 'Netzteil / Akku getrennt',
+        message: 'Keine Versorgungsspannung — klicke das Modul in 3D an, um es wieder anzuschließen.',
+      });
+    } else {
+      if (inCurrentLimit) {
+        warnings.push({
+          severity: 'warning',
+          code: 'PSU_CC_LIMIT',
+          title: `Strombegrenzung aktiv (CC: ${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A)!`,
+          message: `Die Last fordert ${(requestedMa / 1000).toFixed(2).replace('.', ',')} A, aber das Netzteil begrenzt auf ${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A → Ausgangsspannung bricht ein.`,
+        });
+      }
+      if (isThermalDanger) {
+        warnings.push({
+          severity: 'danger',
+          code: 'LINEAR_OVERHEAT',
+          title: `Linearregler überhitzt (${heatLossW.toFixed(1).replace('.', ',')} W Abwärme)!`,
+          message: 'Ein Linearregler (LM7805) verheizt die Spannungsdifferenz komplett zu Wärme. Schalte rechts auf „Buck Schaltregler“ (~90 % Wirkungsgrad)!',
+        });
+      }
+      if (cableDropV > 0.35) {
+        warnings.push({
+          severity: 'warning',
+          code: 'CABLE_DROP',
+          title: `Kabel-Spannungsabfall (−${cableDropV.toFixed(2).replace('.', ',')} V bei AWG ${params.psuCableAwg})`,
+          message: 'Dünne Kabel (AWG 26) verursachen bei hohen Strömen Brownout-Resets. Wähle dickeres AWG-18-Kabel!',
+        });
+      }
+      if (capRemoved) {
+        warnings.push({
+          severity: 'warning',
+          code: 'PSU_NO_CAP',
+          title: 'Stützkondensator (1000 µF) entfernt',
+          message: 'Starke Welligkeit (Ripple) auf der Versorgungsspannung im Oszilloskop sichtbar!',
+        });
+      }
+    }
+
+    const runtimeStr =
+      runtimeHours >= 24
+        ? `${(runtimeHours / 24).toFixed(1).replace('.', ',')} Tage`
+        : `${runtimeHours.toFixed(1).replace('.', ',')} h`;
+
+    let explanation: SceneExplanation;
+    if (psuRemoved) {
+      explanation = {
+        statusBadge: 'STROMQUELLE AUS',
+        statusTone: 'warning',
+        whatHappens: 'Die Energiequelle ist abgeklemmt — Spannung und Laststrom fallen sofort auf 0.',
+        whyItHappens: 'Klicke das Netzteil-/Akku-Modul in 3D an, um die Versorgung wiederherzustellen.',
+      };
+    } else if (isThermalDanger) {
+      explanation = {
+        statusBadge: `ÜBERHITZUNG ${heatLossW.toFixed(1).replace('.', ',')} W`,
+        statusTone: 'danger',
+        whatHappens: `Der Linearregler wandelt ${sourceV.toFixed(1).replace('.', ',')} V auf ${targetRegV.toFixed(1).replace('.', ',')} V herunter und verheizt dabei ${heatLossW.toFixed(1).replace('.', ',')} W Verlustwärme (nur ${efficiencyPct} % Wirkungsgrad)!`,
+        whyItHappens: 'Linearregler (wie LM7805) wirken wie ein verstellbarer Widerstand: P_Verlust = (U_ein − U_aus) · I. Ein Step-Down Buck-Wandler taktet stattdessen induktiv und erreicht ~90 % Wirkungsgrad!',
+      };
+    } else if (inCurrentLimit) {
+      explanation = {
+        statusBadge: 'CC-STROMBEGRENZUNG',
+        statusTone: 'warning',
+        whatHappens: `Die eingestellte Stromgrenze (${params.psuCurrentLimitA.toFixed(1).replace('.', ',')} A) greift! Das Netzteil wechselt von CV (Konstantspannung) in CC (Konstantstrom) und regelt auf ${loadVoltage.toFixed(2).replace('.', ',')} V herunter.`,
+        whyItHappens: 'Genau das schützt deine Schaltung am Labornetzteil vor Kurzschluss-Schäden!',
+      };
+    } else if (isUndervoltage) {
+      explanation = {
+        statusBadge: 'UNTERSPANNUNG',
+        statusTone: 'warning',
+        whatHappens: `An der Last kommen nur noch ${loadVoltage.toFixed(2).replace('.', ',')} V an (Kabelabfall −${cableDropV.toFixed(2).replace('.', ',')} V${isBatteryMode ? `, Akku ${Math.round(params.psuBatterySocPct)} %` : ''}).`,
+        whyItHappens: 'Nutze ein dickeres Kabel (AWG 18 statt AWG 26) oder lade den Akku nach, sonst startet der ESP32/Pi neu (Brownout).',
+      };
+    } else {
+      explanation = {
+        statusBadge: isBatteryMode ? `AKKU OK · ${runtimeStr}` : `STABIL · ${efficiencyPct} % η`,
+        statusTone: 'ok',
+        whatHappens: isBatteryMode
+          ? `${cells}S Akku (${sourceV.toFixed(2).replace('.', ',')} V, ${Math.round(params.psuBatterySocPct)} %) versorgt deine Last stabil mit ${loadVoltage.toFixed(2).replace('.', ',')} V bei ${Math.round(actualMa)} mA → Laufzeit ca. ${runtimeStr}!`
+          : `Netzteil liefert ${sourceV.toFixed(1).replace('.', ',')} V → an der Last liegen stabile ${loadVoltage.toFixed(2).replace('.', ',')} V bei ${Math.round(actualMa)} mA (${outPowerW.toFixed(2).replace('.', ',')} W, Wirkungsgrad ${efficiencyPct} %).`,
+        whyItHappens: `Kabelverlust über AWG ${params.psuCableAwg}: −${cableDropV.toFixed(2).replace('.', ',')} V · Regler-Verlustwärme: ${heatLossW.toFixed(2).replace('.', ',')} W.`,
+      };
+    }
+
+    return this.baseResult(params, t, {
+      probeLabel: `${isBatteryMode ? `${cells}S Akku` : 'Netzteil'} → Last (${targetRegV.toFixed(1).replace('.', ',')} V)`,
+      probePin: isBatteryMode ? `${cells}S BAT` : 'VOUT',
+      nodeVoltage: clamp(loadVoltage, 0, 24),
+      currentMa: actualMa,
+      powerMw: outPowerW * 1000,
+      logicLevel: loadVoltage >= 2.48 ? 'HIGH' : 'LOW',
+      extraTitle: isBatteryMode ? 'Akku-Laufzeit' : 'Wirkungsgrad / Wärme',
+      extraDisplay: isBatteryMode
+        ? `${runtimeStr} (${efficiencyPct} % η)`
+        : `${efficiencyPct} % (${heatLossW.toFixed(1).replace('.', ',')} W Verlust)`,
+      extraPercent: isBatteryMode ? params.psuBatterySocPct : efficiencyPct,
+      ledBrightnessPercent: psuRemoved ? 0 : clamp((actualMa / 1000) * 100, 18, 100),
+      isOvercurrent: inCurrentLimit || isThermalDanger,
+      isCriticalOvercurrent: isThermalDanger,
+      statusLedOn: !psuRemoved && !isThermalDanger,
+      wledBatteryRuntimeHours: runtimeHours,
+      warnings,
+      explanation,
     });
   }
 }

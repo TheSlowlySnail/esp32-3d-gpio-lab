@@ -1,4 +1,4 @@
-export type AppMode = 'lessons' | 'sandbox' | 'guided' | 'funny' | 'favorites';
+export type AppMode = 'lessons' | 'sandbox' | 'guided' | 'funny' | 'favorites' | 'soldering';
 
 export type SandboxToolId = 'place' | 'move' | 'wire' | 'delete';
 

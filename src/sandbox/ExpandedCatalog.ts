@@ -1388,6 +1388,11 @@ const EXTRA_PASSIVE_SEEDS: Array<[string, string, string, string, string, string
   ['estop-button', 'Roter Not-Aus-Pilztaster', 'Not-Aus-Pilz', '🛑', '#ef4444', 'E-STOP', 'NOT-AUS'],
   ['limit-microswitch', 'Endschalter (Microswitch mit Hebel)', 'Endschalter', '🔘', '#64748b', 'LIMIT', 'SWITCH'],
   ['tilt-sw520d', 'SW-520D Neigungs- & Kugelschalter', 'Neigungssw.', '📐', '#f59e0b', 'TILT', 'SW520D'],
+  // +4 Netzteil- & Akku-Module für die Werkbank (gesamt 200 Teile!)
+  ['psu-lab-5v', '5V Breadboard-Netzteil (MB102 USB)', '5V Netzteil', '🔌', '#0ea5e9', 'PSU 5V', 'MB102'],
+  ['psu-meanwell-12v', 'Mean Well 12V Schaltnetzteil (5 A)', 'MeanWell 12V', '⚡', '#64748b', 'MW 12V', '5 AMP'],
+  ['bat-18650-pack', '18650 Li-Ion Akku-Pack + BMS (2S)', '18650 Akku', '🔋', '#2563eb', '18650', '7.4V BMS'],
+  ['bat-lipo-3v7', 'LiPo-Akku 3,7 V (2500 mAh) + TP4056', 'LiPo 3,7V', '🪫', '#10b981', 'LiPo', '3.7V'],
 ];
 
 const EXTRA_PASSIVE_CATALOG: SandboxCatalogItem[] = EXTRA_PASSIVE_SEEDS.map(

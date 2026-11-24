@@ -6,6 +6,7 @@ import type {
   RemovablePartDef,
 } from '../engine/types';
 import { buildExpandedLessons } from './ExpandedLessons';
+import { POWER_SUPPLY_LESSONS } from './PowerSupplyLessons';
 
 export interface LessonFormula {
   label: string;
@@ -26,7 +27,8 @@ export type LessonCategory =
   | 'WLED & LED-Streifen'
   | 'Raspberry Pi'
   | 'Arduino Praxis'
-  | 'Smart Home & IoT';
+  | 'Smart Home & IoT'
+  | 'Netzteile & Akkus';
 
 export interface LessonDefinition {
   id: string;
@@ -912,7 +914,11 @@ const BASE_LESSONS: LessonDefinition[] = [
   },
 ];
 
-export const LESSONS: LessonDefinition[] = [...BASE_LESSONS, ...buildExpandedLessons(BASE_LESSONS)];
+export const LESSONS: LessonDefinition[] = [
+  ...BASE_LESSONS,
+  ...buildExpandedLessons(BASE_LESSONS),
+  ...POWER_SUPPLY_LESSONS,
+];
 
 export function getLessonById(id: string): LessonDefinition {
   return LESSONS.find((l) => l.id === id) ?? LESSONS[0];
@@ -992,5 +998,15 @@ export function createInitialCircuitParameters(): CircuitParameters {
     piFanManualPct: 65,
     piOledPage: 'system',
     piOledContrastPct: 90,
+
+    psuMode: 'bench-psu',
+    psuVoltageV: 12.0,
+    psuCurrentLimitA: 3.0,
+    psuBatteryCells: 2,
+    psuBatteryCapacityMah: 6000,
+    psuBatterySocPct: 85,
+    psuLoadMa: 800,
+    psuRegulatorType: 'buck',
+    psuCableAwg: 22,
   };
 }

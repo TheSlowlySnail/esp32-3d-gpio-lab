@@ -2,11 +2,18 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getEspBoardById } from '../engine/BoardCatalog';
 import { formatResistance } from '../engine/ComponentRegistry';
+import {
+  describeBoardPin,
+  describeComponentPin,
+  getLessonPartPinDetails,
+  getPinKindColorHex,
+} from '../engine/PinProperties';
 import type {
   BoardPinAssignment,
   CircuitParameters,
   EspBoardId,
   HoverPartInfo,
+  HoverPinProperty,
   SimulationResult,
   ThemeMode,
 } from '../engine/types';
@@ -119,9 +126,13 @@ function createWorkbenchTexture(theme: ThemeMode): THREE.CanvasTexture {
 }
 
 function tagHoverable(obj: THREE.Object3D, info: HoverPartInfo): void {
-  obj.userData.hoverInfo = info;
+  if (!obj.userData.keepOwnHoverInfo) {
+    obj.userData.hoverInfo = info;
+  }
   obj.traverse((child) => {
-    child.userData.hoverInfo = info;
+    if (!child.userData.keepOwnHoverInfo) {
+      child.userData.hoverInfo = info;
+    }
   });
 }
 
@@ -202,6 +213,9 @@ export class SceneManager {
   private selectedMovePartId: string | null = null;
   private hoverGhostPartType: SandboxPartType | null = null;
   private lastHoverGhostKey = '';
+  private activeHoverGhostInfo: HoverPartInfo | null = null;
+  private lastSandboxState: SandboxState | null = null;
+  private readonly pinSpriteTexCache = new Map<string, THREE.CanvasTexture>();
   private readonly markerGroup = new THREE.Group();
   private readonly boardPinPadsGroup = new THREE.Group();
   private readonly hoverGhostGroup = new THREE.Group();
@@ -515,6 +529,7 @@ export class SceneManager {
     this.markerGroup.visible = false;
     this.hoverSnapRing.visible = false;
     this.hoverGhostGroup.visible = false;
+    this.activeHoverGhostInfo = null;
 
     const boardChanged = this.swapEspBoardIfNeeded(params.boardId);
     const removedKey = [...params.removedParts].sort().join(',');
@@ -719,8 +734,11 @@ export class SceneManager {
     obj: THREE.Object3D,
     info: HoverPartInfo,
   ): void {
-    tagHoverable(obj, info);
-    applyRemovedGhostEffect(obj, info.isRemoved);
+    const enriched: HoverPartInfo = info.pinDetails
+      ? info
+      : { ...info, pinDetails: getLessonPartPinDetails(info.partId) };
+    tagHoverable(obj, enriched);
+    applyRemovedGhostEffect(obj, enriched.isRemoved);
     this.dynamicCircuitGroup.add(obj);
   }
 
@@ -1753,6 +1771,7 @@ export class SceneManager {
     this.sandboxTool = tool;
     if (tool === 'wire' || tool === 'delete') {
       this.hoverGhostGroup.visible = false;
+      this.activeHoverGhostInfo = null;
     }
   }
 
@@ -1762,7 +1781,80 @@ export class SceneManager {
     this.lastHoverGhostKey = '';
     if (!type) {
       this.hoverGhostGroup.visible = false;
+      this.activeHoverGhostInfo = null;
     }
+  }
+
+  private getShortPinBadgeText(pinLabel: string): string {
+    const raw = pinLabel.trim();
+    if (raw.startsWith('Anode')) return '+';
+    if (raw.startsWith('Kathode')) return '−';
+    if (raw.startsWith('Gate')) return 'G';
+    if (raw.startsWith('Drain')) return 'D';
+    if (raw.startsWith('Source')) return 'S';
+    if (raw.startsWith('Rot (')) return 'R';
+    if (raw.startsWith('Grün (')) return 'G';
+    if (raw.startsWith('Blau (')) return 'B';
+    if (raw.startsWith('GND')) return 'GND';
+    if (raw.startsWith('Plus')) return '+';
+    if (raw.startsWith('Minus')) return '−';
+    if (raw.startsWith('Signal')) return 'SIG';
+    if (raw.length <= 6) return raw;
+    return raw.slice(0, 6);
+  }
+
+  private createPinLabelSprite(pinLabel: string, colorHex: string): THREE.Sprite {
+    const text = this.getShortPinBadgeText(pinLabel);
+    const cacheKey = `${text}::${colorHex}`;
+    let tex = this.pinSpriteTexCache.get(cacheKey);
+    if (!tex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 160;
+      canvas.height = 68;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Abgerundetes dunkles Pill-Schild mit farbigem Pin-Rand
+        const r = 18;
+        ctx.beginPath();
+        ctx.moveTo(6 + r, 6);
+        ctx.lineTo(canvas.width - 6 - r, 6);
+        ctx.quadraticCurveTo(canvas.width - 6, 6, canvas.width - 6, 6 + r);
+        ctx.lineTo(canvas.width - 6, canvas.height - 6 - r);
+        ctx.quadraticCurveTo(canvas.width - 6, canvas.height - 6, canvas.width - 6 - r, canvas.height - 6);
+        ctx.lineTo(6 + r, canvas.height - 6);
+        ctx.quadraticCurveTo(6, canvas.height - 6, 6, canvas.height - 6 - r);
+        ctx.lineTo(6, 6 + r);
+        ctx.quadraticCurveTo(6, 6, 6 + r, 6);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = colorHex;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 30px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 1);
+      }
+      tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.pinSpriteTexCache.set(cacheKey, tex);
+    }
+
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.56, 0.24, 1);
+    sprite.renderOrder = 25;
+    sprite.raycast = () => {};
+    return sprite;
   }
 
   private buildSandboxPartVisual(
@@ -1930,21 +2022,53 @@ export class SceneManager {
       this.hoverGhostGroup.add(group);
     }
 
-    // Leuchtende Pin-Fußabdruck-Ringe exakt auf den Ziel-Löchern des Steckbretts!
-    const pinRingGeo = new THREE.RingGeometry(0.055, 0.115, 16);
-    const pinRingMat = new THREE.MeshBasicMaterial({
-      color: 0x22d3ee,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.92,
+    // Farbkodierte Pin-Fußabdruck-Ringe + 3D-Pin-Schildchen direkt an jedem Ziel-Loch!
+    const pinRingGeo = new THREE.RingGeometry(0.055, 0.125, 18);
+    const pinDetails: HoverPinProperty[] = [];
+
+    def.pinOffsets.forEach((po, idx) => {
+      const p = pins[idx];
+      const slot = `${Math.max(1, Math.min(30, col + po.dCol))}${effectiveRow}`;
+      const prop = describeComponentPin(po.pinLabel, slot);
+      pinDetails.push(prop);
+      const colorHex = getPinKindColorHex(prop.kind);
+
+      if (p) {
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(colorHex),
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const r = new THREE.Mesh(pinRingGeo, ringMat);
+        r.rotation.x = -Math.PI / 2;
+        r.position.set(p.x, p.y + 0.048, p.z);
+        r.raycast = () => {};
+        this.hoverGhostGroup.add(r);
+
+        // Leicht gestaffelte Höhe, damit eng beieinanderliegende Pin-Badges nie überlappen
+        const sprite = this.createPinLabelSprite(po.pinLabel, colorHex);
+        const zStagger = idx % 2 === 0 ? 0.22 : -0.22;
+        const yStagger = idx % 2 === 0 ? 0.42 : 0.64;
+        sprite.position.set(p.x, p.y + yStagger, p.z + zStagger);
+        this.hoverGhostGroup.add(sprite);
+      }
     });
-    for (const p of pins) {
-      const r = new THREE.Mesh(pinRingGeo, pinRingMat);
-      r.rotation.x = -Math.PI / 2;
-      r.position.set(p.x, p.y + 0.045, p.z);
-      r.raycast = () => {};
-      this.hoverGhostGroup.add(r);
-    }
+
+    this.activeHoverGhostInfo = {
+      partId: `ghost-${type}`,
+      name: `${def.icon ? `${def.icon} ` : ''}${def.name} → ${col}${effectiveRow}`,
+      categoryLabel: `${def.category} · Vorschau`,
+      badgeLabel: this.sandboxTool === 'move' ? 'VERSCHIEBEN' : 'VORSCHAU',
+      description: def.description,
+      specLine:
+        this.sandboxTool === 'move'
+          ? `Klick zum Absetzen auf Position ${col}${effectiveRow}`
+          : `Klick zum Stecken auf Position ${col}${effectiveRow} (${def.pinOffsets.length} Pins)`,
+      removable: false,
+      isRemoved: false,
+      pinDetails,
+    };
 
     this.hoverGhostGroup.visible = true;
   }
@@ -1992,14 +2116,17 @@ export class SceneManager {
       const dot = new THREE.Mesh(sphereGeo, mat);
       dot.position.copy(pos).add(new THREE.Vector3(0, 0.08, 0));
       dot.userData.sandboxEndpoint = ep;
+
+      const rawPinLabel =
+        item.role === '3V3' || item.role === 'GND'
+          ? item.role
+          : this.esp32.spec.pins[item.role as keyof BoardPinAssignment]?.label ?? item.role;
+      const detailed = describeBoardPin(this.esp32.spec, rawPinLabel, item.role);
       dot.userData.hoverInfo = {
+        ...detailed,
         partId: `pin-${item.role}`,
         name: formatEndpointLabel(ep, this.currentBoardId),
-        categoryLabel: 'Board-Anschluss',
-        description: 'Klicke diesen leuchtenden Pin im Jumperkabel-Modus an, um eine Leitung zum Steckbrett zu ziehen!',
-        specLine: `Pin-Rolle: ${item.role}`,
-        removable: false,
-        isRemoved: false,
+        specLine: `${detailed.specLine} · Klickbar für Jumperkabel`,
       } satisfies HoverPartInfo;
       this.boardPinPadsGroup.add(dot);
     }
@@ -2018,6 +2145,7 @@ export class SceneManager {
     selectedMovePartId: string | null = null,
   ): void {
     this.sandboxModeActive = true;
+    this.lastSandboxState = state;
     this.lastSandboxElapsed = elapsedSeconds;
     this.selectedMovePartId = selectedMovePartId;
     this.breadboard.group.visible = true;
@@ -2183,22 +2311,60 @@ export class SceneManager {
     this.clearDynamicCircuit();
     this.sandboxPartHandles.clear();
 
+    const pinHitGeo = new THREE.SphereGeometry(0.115, 10, 10);
+    const pinHitMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+
     for (const part of state.parts) {
       const def = getCatalogItem(part.type);
       const effectiveRow = normalizePartRow(part.row);
-      const { group, handle } = this.buildSandboxPartVisual(part.type, part.col, effectiveRow, true);
+      const { group, handle, pins } = this.buildSandboxPartVisual(part.type, part.col, effectiveRow, true);
 
       if (group) {
+        const pinDetails = def.pinOffsets.map((po) => {
+          const slot = `${Math.max(1, Math.min(30, part.col + po.dCol))}${effectiveRow}`;
+          return describeComponentPin(po.pinLabel, slot);
+        });
         const hoverInfo: HoverPartInfo = {
           partId: part.id,
-          name: `${def.name} (${part.col}${effectiveRow})`,
+          name: `${def.icon ? `${def.icon} ` : ''}${def.name} (${part.col}${effectiveRow})`,
           categoryLabel: def.category,
+          badgeLabel: `${def.pinOffsets.length} PINS`,
           description: def.description,
-          specLine: `Pins: ${def.pinOffsets.map((po) => `${part.col + po.dCol}${effectiveRow} (${po.pinLabel})`).join(' · ')}`,
+          specLine: `Steckplatz ${part.col}${effectiveRow} · Alle Pin-Eigenschaften oben`,
           removable: false,
           isRemoved: false,
+          pinDetails,
         };
         tagHoverable(group, hoverInfo);
+
+        // Einzelne Pin-Hitboxen direkt an den Beinchen, damit man auch gezielt jeden Pin einzeln abfragen kann
+        def.pinOffsets.forEach((po, idx) => {
+          const pos = pins[idx];
+          if (!pos) return;
+          const slot = `${Math.max(1, Math.min(30, part.col + po.dCol))}${effectiveRow}`;
+          const focusedPin = describeComponentPin(po.pinLabel, slot);
+          const hit = new THREE.Mesh(pinHitGeo, pinHitMat);
+          hit.position.set(pos.x, pos.y + 0.08, pos.z);
+          hit.userData.keepOwnHoverInfo = true;
+          hit.userData.sandboxItem = { kind: 'part', id: part.id };
+          hit.userData.hoverInfo = {
+            partId: `${part.id}-pin-${idx}`,
+            name: `${focusedPin.pin} — ${def.shortName}`,
+            categoryLabel: `Bauteil-Pin · ${def.category}`,
+            badgeLabel: focusedPin.role,
+            description: focusedPin.property,
+            specLine: `Steckbrett-Loch ${slot} (verbunden mit ${slot.slice(0, -1)}${['a', 'b', 'c', 'd', 'e'].includes(effectiveRow) ? 'a–e' : 'f–j'})`,
+            removable: false,
+            isRemoved: false,
+            pinDetails,
+          } satisfies HoverPartInfo;
+          this.dynamicCircuitGroup.add(hit);
+        });
+
         group.traverse((c) => {
           c.userData.sandboxItem = { kind: 'part', id: part.id };
         });
@@ -2279,6 +2445,84 @@ export class SceneManager {
     return null;
   }
 
+  private buildBreadboardHoleHoverInfo(col: number, row: string): HoverPartInfo {
+    const isTopPlus = row === '+top';
+    const isBotPlus = row === '+bot';
+    const isTopMinus = row === '-top';
+    const isBotMinus = row === '-bot';
+
+    if (isTopPlus || isBotPlus || isTopMinus || isBotMinus) {
+      const isPlus = isTopPlus || isBotPlus;
+      const side = isTopPlus || isTopMinus ? 'obere' : 'untere';
+      return {
+        partId: `bb-rail-${row}`,
+        name: `${isPlus ? '+3,3V / +5V Stromschiene' : 'GND Masseschiene'} (${side} Schiene, Spalte ${col})`,
+        categoryLabel: 'Steckbrett-Schiene',
+        badgeLabel: isPlus ? '+V RAIL' : 'GND RAIL',
+        description: isPlus
+          ? 'Durchgehende rote Plus-Schiene entlang des Steckbretts — alle Löcher dieser Reihe sind intern verbunden.'
+          : 'Durchgehende blaue Masse-Schiene (0 V) — verbinde hier Board-GND und alle Bauteil-Kathoden / GND-Pins.',
+        specLine: `Spalte ${col} · Durchgehende Schiene`,
+        removable: false,
+        isRemoved: false,
+        pinDetails: [
+          {
+            pin: isPlus ? 'Rote Schiene (+)' : 'Blaue Schiene (−)',
+            role: isPlus ? 'Stromschiene' : 'Masse (0 V)',
+            property: isPlus
+              ? 'Verteilt +3,3 V / +5 V an mehrere Bauteile gleichzeitig'
+              : 'Gemeinsamer Rückleiter (GND) für die gesamte Schaltung',
+            kind: isPlus ? 'power' : 'ground',
+          },
+        ],
+      };
+    }
+
+    const isLowerHalf = ['a', 'b', 'c', 'd', 'e'].includes(row);
+    const groupSpan = isLowerHalf ? `${col}a–${col}e` : `${col}f–${col}j`;
+    const connectedPins: HoverPinProperty[] = [];
+
+    if (this.sandboxModeActive && this.lastSandboxState) {
+      for (const part of this.lastSandboxState.parts) {
+        const def = getCatalogItem(part.type);
+        const effRow = normalizePartRow(part.row);
+        const partLower = ['a', 'b', 'c', 'd', 'e'].includes(effRow);
+        if (partLower !== isLowerHalf) continue;
+        for (const po of def.pinOffsets) {
+          if (part.col + po.dCol === col) {
+            const prop = describeComponentPin(po.pinLabel, `${def.shortName} @ ${col}${effRow}`);
+            connectedPins.push(prop);
+          }
+        }
+      }
+    }
+
+    return {
+      partId: `bb-hole-${col}${row}`,
+      name: `Steckbrett-Loch ${col}${row}`,
+      categoryLabel: 'Steckbrett-Kontakt',
+      badgeLabel: connectedPins.length > 0 ? 'BELEGT' : `REIHE ${groupSpan}`,
+      description:
+        connectedPins.length > 0
+          ? `Intern leitend verbunden mit ${groupSpan} — liegt direkt am Bauteil-Pin an!`
+          : `Lötfreier Federkontakt: Alle 5 Löcher in ${groupSpan} sind intern leitend verbunden (getrennt durch den Mittelgraben).`,
+      specLine: `5er-Verbund: ${groupSpan} · Raster 2,54 mm`,
+      removable: false,
+      isRemoved: false,
+      pinDetails:
+        connectedPins.length > 0
+          ? connectedPins
+          : [
+              {
+                pin: `Spalte ${col} (${isLowerHalf ? 'a–e' : 'f–j'})`,
+                role: '5er-Knoten',
+                property: 'Alle 5 Löcher dieser halben Spalte bilden einen elektrischen Knoten',
+                kind: 'passive',
+              },
+            ],
+    };
+  }
+
   private getHoverTarget(clientX: number, clientY: number): HoverPartInfo | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
@@ -2288,11 +2532,11 @@ export class SceneManager {
 
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
-    // Prioritize dynamic components & ESP board before the underlying breadboard
-    const targets = this.sandboxModeActive
-      ? [this.boardPinPadsGroup, this.dynamicCircuitGroup, this.esp32.group, this.breadboard.group]
-      : [this.dynamicCircuitGroup, this.esp32.group, this.breadboard.group];
-    for (const root of targets) {
+    // 1. Zuerst immer gezielte Board-Pin-Pads & einzelne Board-Pins auf allen 15 Boards treffen!
+    const pinRoots = this.sandboxModeActive
+      ? [this.boardPinPadsGroup, this.esp32.pinHitGroup]
+      : [this.esp32.pinHitGroup];
+    for (const root of pinRoots) {
       if (!root.visible) continue;
       const hits = this.raycaster.intersectObject(root, true);
       for (const h of hits) {
@@ -2300,6 +2544,32 @@ export class SceneManager {
         if (info) return info;
       }
     }
+
+    // 2. Wenn im Werkbank-/Bau-Modus gerade die 3D-Hover-Vorschau auf dem Breadboard aktiv ist,
+    //    direkt deren vollständige Pin-Eigenschaften für die Ziel-Position anzeigen!
+    if (this.sandboxModeActive && this.hoverGhostGroup.visible && this.activeHoverGhostInfo) {
+      return this.activeHoverGhostInfo;
+    }
+
+    // 3. Dynamische Bauteile (inkl. einzelner Bauteil-Pin-Hitboxes) & Board-Gehäuse
+    for (const root of [this.dynamicCircuitGroup, this.esp32.group]) {
+      if (!root.visible) continue;
+      const hits = this.raycaster.intersectObject(root, true);
+      for (const h of hits) {
+        const info = h.object.userData.hoverInfo as HoverPartInfo | undefined;
+        if (info) return info;
+      }
+    }
+
+    // 4. Steckbrett -> exaktes Loch + daran anliegende Pin-Eigenschaften anzeigen
+    if (this.breadboard.group.visible) {
+      const bbHits = this.raycaster.intersectObject(this.breadboard.group, true);
+      if (bbHits.length > 0) {
+        const nearest = this.breadboard.findNearestHole(bbHits[0].point);
+        return this.buildBreadboardHoleHoverInfo(nearest.col, nearest.row);
+      }
+    }
+
     return null;
   }
 
@@ -2344,18 +2614,22 @@ export class SceneManager {
             this.updateHoverGhost(this.hoverGhostPartType, ep.col, ep.row ?? 'g');
           } else {
             this.hoverGhostGroup.visible = false;
+            this.activeHoverGhostInfo = null;
           }
         } else {
           this.hoverSnapRing.visible = false;
           this.hoverGhostGroup.visible = false;
+          this.activeHoverGhostInfo = null;
         }
       } else {
         this.hoverSnapRing.visible = false;
         this.hoverGhostGroup.visible = false;
+        this.activeHoverGhostInfo = null;
       }
     } else {
       this.hoverSnapRing.visible = false;
       this.hoverGhostGroup.visible = false;
+      this.activeHoverGhostInfo = null;
     }
 
     const hoverInfo = this.getHoverTarget(e.clientX, e.clientY);
@@ -2384,6 +2658,7 @@ export class SceneManager {
     this.activeButton?.setHovered(false);
     this.hoverSnapRing.visible = false;
     this.hoverGhostGroup.visible = false;
+    this.activeHoverGhostInfo = null;
     this.callbacks.onHoverPartChange?.(null, 0, 0);
   };
 

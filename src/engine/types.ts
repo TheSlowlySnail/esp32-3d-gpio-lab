@@ -152,6 +152,26 @@ export interface RemovablePartDef {
   removedEffectHint: string;
 }
 
+export type PinPropertyKind =
+  | 'power'
+  | 'ground'
+  | 'signal'
+  | 'bus'
+  | 'analog'
+  | 'passive'
+  | 'warning';
+
+export interface HoverPinProperty {
+  /** Kurze Pin-Bezeichnung inkl. optionalem Steckbrett-Loch (z. B. "12g · VCC", "G25") */
+  pin: string;
+  /** Kurzes Eigenschafts-Badge (z. B. "3,3V / 5V", "GND", "I²C SDA", "PWM") */
+  role: string;
+  /** Verständliche Eigenschafts-Beschreibung */
+  property: string;
+  /** Farbkodierung für 3D-Ringe, 3D-Sprites & Tooltip */
+  kind: PinPropertyKind;
+}
+
 export interface HoverPartInfo {
   partId: string;
   name: string;
@@ -160,6 +180,10 @@ export interface HoverPartInfo {
   specLine: string;
   removable: boolean;
   isRemoved: boolean;
+  /** Optionales Status-Badge rechts oben (z. B. "VORSCHAU", "BOARD-PIN", "STECKBRETT") */
+  badgeLabel?: string;
+  /** Strukturierte Pin-Eigenschaften, die beim Hovern angezeigt werden */
+  pinDetails?: HoverPinProperty[];
 }
 
 export interface SceneExplanation {

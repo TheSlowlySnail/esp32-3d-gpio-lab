@@ -1,5 +1,11 @@
 import './style.css';
-import { CircuitSolver, defaultComponentRegistry, ESP_BOARDS, getEspBoardById } from './engine';
+import {
+  CircuitSolver,
+  defaultComponentRegistry,
+  ESP_BOARDS,
+  getEspBoardById,
+  getPinKindColorHex,
+} from './engine';
 import type {
   CircuitParameters,
   CircuitTopologyId,
@@ -453,17 +459,18 @@ class LearnEsp32App {
             <!-- Floating Telemetry HUD -->
             <div data-mount="hud" class="absolute top-3 left-3 right-3 pointer-events-none z-10"></div>
 
-            <!-- Floating 3D Component Hover Tooltip -->
+            <!-- Floating 3D Component & Pin Hover Tooltip -->
             <div
               data-tooltip="hover"
-              class="hidden pointer-events-none fixed z-40 w-72 rounded-xl eng-hud-card backdrop-blur-md border shadow-2xl p-3 transition-opacity duration-75"
+              class="hidden pointer-events-none fixed z-40 w-80 max-w-[340px] rounded-xl eng-hud-card backdrop-blur-md border shadow-2xl p-3 transition-opacity duration-75"
             >
               <div class="flex items-center justify-between gap-2">
-                <span data-tip="category" class="text-[10px] font-mono uppercase tracking-wider eng-text-accent">Bauteil</span>
-                <span data-tip="status" class="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border">EINGEBAUT</span>
+                <span data-tip="category" class="text-[10px] font-mono uppercase tracking-wider eng-text-accent truncate">Bauteil</span>
+                <span data-tip="status" class="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0">EINGEBAUT</span>
               </div>
               <div data-tip="name" class="mt-1 text-xs font-bold eng-text-main leading-snug"></div>
               <p data-tip="desc" class="mt-1 text-[11px] eng-text-body leading-relaxed"></p>
+              <div data-tip="pins" class="hidden mt-2 pt-2 border-t border-slate-500/25 flex flex-col gap-1.5"></div>
               <div data-tip="spec" class="mt-2 pt-1.5 border-t border-slate-500/20 text-[10.5px] font-mono eng-text-muted"></div>
             </div>
 
@@ -853,6 +860,7 @@ class LearnEsp32App {
     const statusEl = this.hoverTooltipEl.querySelector('[data-tip="status"]');
     const nameEl = this.hoverTooltipEl.querySelector('[data-tip="name"]');
     const descEl = this.hoverTooltipEl.querySelector('[data-tip="desc"]');
+    const pinsEl = this.hoverTooltipEl.querySelector('[data-tip="pins"]');
     const specEl = this.hoverTooltipEl.querySelector('[data-tip="spec"]');
 
     if (catEl) catEl.textContent = info.categoryLabel;
@@ -860,42 +868,89 @@ class LearnEsp32App {
     if (descEl) descEl.textContent = info.description;
     if (specEl) specEl.textContent = info.specLine;
 
+    if (pinsEl) {
+      if (info.pinDetails && info.pinDetails.length > 0) {
+        const escapeHtml = (s: string) =>
+          s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        pinsEl.innerHTML = `
+          <div class="text-[9.5px] font-mono uppercase tracking-wider eng-text-muted">
+            Pin-Belegung &amp; Eigenschaften
+          </div>
+          ${info.pinDetails
+            .map((p) => {
+              const color = getPinKindColorHex(p.kind);
+              return `
+                <div class="rounded-md bg-slate-900/35 border border-slate-500/20 px-2 py-1 flex flex-col gap-0.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="flex items-center gap-1.5 text-[10.5px] font-mono font-bold eng-text-main min-w-0 truncate">
+                      <span class="w-2 h-2 rounded-full shrink-0" style="background:${color};box-shadow:0 0 6px ${color}"></span>
+                      <span class="truncate">${escapeHtml(p.pin)}</span>
+                    </span>
+                    <span class="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0" style="color:${color};background:${color}22;border:1px solid ${color}55">${escapeHtml(p.role)}</span>
+                  </div>
+                  <div class="text-[10px] eng-text-body leading-snug pl-3.5">${escapeHtml(p.property)}</div>
+                </div>
+              `;
+            })
+            .join('')}
+        `;
+        pinsEl.classList.remove('hidden');
+      } else {
+        pinsEl.innerHTML = '';
+        pinsEl.classList.add('hidden');
+      }
+    }
+
     if (statusEl) {
       if (info.isRemoved) {
         statusEl.textContent = 'ENTFERNT';
         statusEl.className =
-          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-amber-500/20 text-amber-500 border-amber-500/50';
+          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-amber-500/20 text-amber-500 border-amber-500/50 shrink-0';
       } else if (info.removable) {
         statusEl.textContent = 'ENTFERNBAR';
         statusEl.className =
-          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-cyan-500/15 eng-text-accent border-cyan-500/40';
+          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-cyan-500/15 eng-text-accent border-cyan-500/40 shrink-0';
+      } else if (info.badgeLabel) {
+        statusEl.textContent = info.badgeLabel;
+        const badgeTone =
+          info.badgeLabel === 'POWER' || info.badgeLabel === '+V RAIL'
+            ? 'bg-red-500/20 text-red-400 border-red-500/50'
+            : info.badgeLabel === 'GND' || info.badgeLabel === 'GND RAIL'
+              ? 'bg-slate-500/25 text-slate-300 border-slate-400/50'
+              : info.badgeLabel === 'VORSCHAU' || info.badgeLabel === 'VERSCHIEBEN'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50'
+                : info.badgeLabel.includes('I²C') || info.badgeLabel === 'UART' || info.badgeLabel === 'SPI'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+                  : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40';
+        statusEl.className = `text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${badgeTone}`;
       } else {
         statusEl.textContent = 'FEST';
         statusEl.className =
-          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-slate-500/15 eng-text-muted border-slate-500/30';
+          'text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded border bg-slate-500/15 eng-text-muted border-slate-500/30 shrink-0';
       }
     }
 
-    // Clamp tooltip cleanly inside viewport bounds
+    // Erst sichtbar machen, damit reale Tooltip-Höhe (inkl. Pin-Liste) exakt geclampt werden kann
+    this.hoverTooltipEl.classList.remove('hidden');
+
     const pad = 16;
-    const tipW = 288;
-    const tipH = 155;
+    const tipW = Math.max(this.hoverTooltipEl.offsetWidth, 320);
+    const tipH = Math.max(this.hoverTooltipEl.offsetHeight, 160);
     const bounds = this.sceneSectionEl.getBoundingClientRect();
-    let left = clientX + 16;
-    let top = clientY + 16;
+    let left = clientX + 18;
+    let top = clientY + 14;
 
     if (left + tipW > Math.min(window.innerWidth, bounds.right) - pad) {
-      left = clientX - tipW - 16;
+      left = clientX - tipW - 18;
     }
     if (top + tipH > Math.min(window.innerHeight, bounds.bottom) - pad) {
       top = clientY - tipH - 12;
     }
     left = Math.max(pad, left);
-    top = Math.max(64, top);
+    top = Math.max(64, Math.min(top, window.innerHeight - tipH - pad));
 
     this.hoverTooltipEl.style.left = `${Math.round(left)}px`;
     this.hoverTooltipEl.style.top = `${Math.round(top)}px`;
-    this.hoverTooltipEl.classList.remove('hidden');
   }
 
   private togglePartRemoved(partId: string): void {

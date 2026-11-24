@@ -1,12 +1,14 @@
 import * as THREE from 'three';
+import { describeBoardPin } from '../../engine/PinProperties';
 import type { BoardPinAssignment, EspBoardSpec } from '../../engine/types';
 
 /**
- * Universeller 3D-ESP-Board-Generator für alle 6 ESP-Modelle
- * (ESP32 DevKit V1, C3 SuperMini, S3-Zero Mini, D1 Mini, S3 DevKitC-1, C6 DevKitC-1).
+ * Universeller 3D-Board-Generator für alle 15 Mikrocontroller & Mikrocomputer
+ * (ESP32, Raspberry Pi 40-Pin SBC & Pico 2 W, Arduino UNO/Nano/Mega/Pro Micro).
  */
 export class Esp32Mesh {
   public readonly group = new THREE.Group();
+  public readonly pinHitGroup = new THREE.Group();
   public readonly spec: EspBoardSpec;
   private readonly pinLocalPositions = new Map<string, THREE.Vector3>();
   private statusLedMat!: THREE.MeshStandardMaterial;
@@ -18,6 +20,8 @@ export class Esp32Mesh {
   constructor(spec: EspBoardSpec) {
     this.spec = spec;
     this.group.name = `Board_${spec.id}`;
+    this.pinHitGroup.name = `BoardPins_${spec.id}`;
+    this.group.add(this.pinHitGroup);
     this.buildPcb();
     if (spec.family === 'raspberry-pi-sbc') {
       this.buildRaspberryPiSbcHardware();
@@ -461,6 +465,13 @@ export class Esp32Mesh {
     this.group.add(base);
 
     const pinGeo = new THREE.BoxGeometry(0.055, 0.48, 0.055);
+    const hitMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const hitGeo = new THREE.BoxGeometry(0.18, 0.62, Math.max(0.16, zStep * 0.9));
+
     for (let i = 0; i < pinCount; i++) {
       const z = zStart + i * zStep;
       const xInner = headerX - 0.1;
@@ -482,12 +493,30 @@ export class Esp32Mesh {
         this.pinLocalPositions.set(innerLabel, v);
         const clean = innerLabel.replace(/[2345678B]$/, '');
         if (!this.pinLocalPositions.has(clean)) this.pinLocalPositions.set(clean, v.clone());
+
+        const info = describeBoardPin(this.spec, innerLabel, undefined, i * 2 + 1);
+        pInner.userData.keepOwnHoverInfo = true;
+        pInner.userData.hoverInfo = info;
+        const hitInner = new THREE.Mesh(hitGeo, hitMat);
+        hitInner.position.set(xInner, topY + 0.3, z);
+        hitInner.userData.keepOwnHoverInfo = true;
+        hitInner.userData.hoverInfo = info;
+        this.pinHitGroup.add(hitInner);
       }
       if (outerLabel) {
         const v = new THREE.Vector3(xOuter, topY + 0.42, z);
         this.pinLocalPositions.set(outerLabel, v);
         const clean = outerLabel.replace(/[2345678B]$/, '');
         if (!this.pinLocalPositions.has(clean)) this.pinLocalPositions.set(clean, v.clone());
+
+        const info = describeBoardPin(this.spec, outerLabel, undefined, i * 2 + 2);
+        pOuter.userData.keepOwnHoverInfo = true;
+        pOuter.userData.hoverInfo = info;
+        const hitOuter = new THREE.Mesh(hitGeo, hitMat);
+        hitOuter.position.set(xOuter, topY + 0.3, z);
+        hitOuter.userData.keepOwnHoverInfo = true;
+        hitOuter.userData.hoverInfo = info;
+        this.pinHitGroup.add(hitOuter);
       }
     }
   }
@@ -504,6 +533,12 @@ export class Esp32Mesh {
 
     const pinGeo = new THREE.BoxGeometry(0.06, 0.7, 0.06);
     const padGeo = new THREE.CylinderGeometry(0.088, 0.088, 0.02, 12);
+    const hitMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const hitGeo = new THREE.BoxGeometry(0.42, 0.72, Math.max(0.18, zStep * 0.92));
 
     for (const side of ['left', 'right'] as const) {
       const x = side === 'left' ? -(width / 2 - edgeInset) : width / 2 - edgeInset;
@@ -519,14 +554,30 @@ export class Esp32Mesh {
 
       labels.forEach((label, idx) => {
         const z = zStart + idx * zStep;
+        const info = describeBoardPin(this.spec, label);
 
         const pinMesh = new THREE.Mesh(pinGeo, goldPinMat);
         pinMesh.position.set(x, this.pcbElevation - 0.12, z);
+        pinMesh.userData.keepOwnHoverInfo = true;
+        pinMesh.userData.hoverInfo = info;
         this.group.add(pinMesh);
 
         const padMesh = new THREE.Mesh(padGeo, goldPinMat);
         padMesh.position.set(x, this.pcbElevation + this.pcbHeight / 2 + 0.01, z);
+        padMesh.userData.keepOwnHoverInfo = true;
+        padMesh.userData.hoverInfo = info;
         this.group.add(padMesh);
+
+        // Komfortable unsichtbare Hover-Hitbox für den Pin inkl. Silkscreen-Rand
+        const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+        hitMesh.position.set(
+          side === 'left' ? x + 0.08 : x - 0.08,
+          this.pcbElevation + 0.12,
+          z,
+        );
+        hitMesh.userData.keepOwnHoverInfo = true;
+        hitMesh.userData.hoverInfo = info;
+        this.pinHitGroup.add(hitMesh);
 
         const attach = new THREE.Vector3(x, this.pcbElevation + this.pcbHeight / 2 + 0.18, z);
         this.pinLocalPositions.set(label, attach);

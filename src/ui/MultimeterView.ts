@@ -1,12 +1,20 @@
+import {
+  BOARD_FAULT_SCENARIOS,
+  BOARD_TEST_PADS,
+  evaluateInteractiveBoard,
+  renderInteractiveBoardSvg,
+  type BoardFaultId,
+} from './MultimeterBoard';
+
 /**
  * Interaktive Rubrik "📟 Multimeter":
- * - Virtuelles Digital-Multimeter mit LCD, Wahlschalter (OFF, V DC, V AC, Ω, Durchgang/Diode, mA, 10A)
- *   und umsteckbarer roter Messbuchse (V Ω mA vs. 10A)
- * - 6 Praxis-Messstationen mit Parallel- vs. Reihenmessung, Polaritätstausch, Schaltung EIN/AUS,
- *   realistischer Sicherungs-Auslösung bei Kurzschluss und optionalem WebAudio-Durchgangs-Piepton
- * - 5 kleine Mess-Aufgaben zum Abhaken + anschauliche Erklärung des Innenlebens (10 MΩ, Shunt, Konstantstrom)
+ * - Modus 1 (Standard): Interaktive FR-4 Mess-Platine mit 9 frei anklickbaren goldenen Testpunkten
+ *   für rote & schwarze Messspitze, klickbarem Jumper J1 (echte Reihen-Strommessung!) & Fehler-Detektiv!
+ * - Modus 2: 7 geführte Mess-Stationen + 5 Praxis-Checklisten-Aufgaben
+ * - Links immer das virtuelle Digital-Multimeter mit LCD, Drehschalter, 3 Buchsen & Sicherungs-Simulation
  */
 
+type MultimeterTabMode = 'board' | 'stations';
 type MeterDialMode = 'OFF' | 'VDC' | 'VAC' | 'OHM' | 'CONT' | 'MA' | 'A10';
 type RedJackId = 'V_OHM_MA' | 'A10';
 type StationId = 'esp-3v3' | 'resistor-220' | 'cable-good' | 'cable-broken' | 'led-diode' | 'current-led' | 'current-wled';
@@ -242,6 +250,7 @@ const MISSIONS: MissionDef[] = [
 
 export class MultimeterView {
   private readonly root: HTMLElement;
+  private tabMode: MultimeterTabMode = 'board';
   private dial: MeterDialMode = 'VDC';
   private redJack: RedJackId = 'V_OHM_MA';
   private stationId: StationId = 'esp-3v3';
@@ -252,35 +261,73 @@ export class MultimeterView {
   private readonly completedMissions = new Set<string>();
   private audioCtx: AudioContext | null = null;
 
+  // Interaktive Mess-Platine State
+  private redPadId = 'TP2'; // +3,3V
+  private blackPadId = 'TP3'; // GND
+  private activeProbe: 'red' | 'black' = 'red';
+  private jumperJ1Closed = true;
+  private boardFault: BoardFaultId = 'none';
+  private detectiveActive = false;
+  private detectiveFeedback: { tone: 'ok' | 'danger'; text: string } | null = null;
+  private detectiveSolvedCount = 0;
+
   constructor(root: HTMLElement) {
     this.root = root;
   }
 
   public render(): void {
     const station = TEST_STATIONS.find((s) => s.id === this.stationId) ?? TEST_STATIONS[0];
-    const reading = this.computeReading(station);
+    const boardEval = evaluateInteractiveBoard({
+      dial: this.dial,
+      redJack: this.redJack,
+      redPadId: this.redPadId,
+      blackPadId: this.blackPadId,
+      circuitPowered: this.circuitPowered,
+      jumperJ1Closed: this.jumperJ1Closed,
+      fault: this.boardFault,
+      meterFuseBlown: this.fuseBlown,
+    });
+    const stationReading = this.computeReading(station);
+    const reading: MeasurementReading =
+      this.tabMode === 'board'
+        ? {
+            displayMain: boardEval.displayMain,
+            displayUnit: boardEval.displayUnit,
+            subBadge: boardEval.subBadge,
+            tone: boardEval.tone,
+            beep: boardEval.beep,
+            ledGlow: boardEval.ledGlowByDiodeTest,
+            explanationTitle: boardEval.explanationTitle,
+            explanationBody: boardEval.explanationBody,
+            blownFuse: boardEval.blownFuse,
+          }
+        : stationReading;
 
     if (reading.blownFuse && !this.fuseBlown) {
       this.fuseBlown = reading.blownFuse;
     }
 
-    // Check completed missions
-    for (const m of MISSIONS) {
-      if (
-        m.check({
-          stationId: this.stationId,
-          dial: this.dial,
-          redJack: this.redJack,
-          circuitPowered: this.circuitPowered,
-          probesSwapped: this.probesSwapped,
-          fuseBlown: this.fuseBlown,
-        })
-      ) {
-        this.completedMissions.add(m.id);
+    // Check completed missions (im Stationen-Modus)
+    if (this.tabMode === 'stations') {
+      for (const m of MISSIONS) {
+        if (
+          m.check({
+            stationId: this.stationId,
+            dial: this.dial,
+            redJack: this.redJack,
+            circuitPowered: this.circuitPowered,
+            probesSwapped: this.probesSwapped,
+            fuseBlown: this.fuseBlown,
+          })
+        ) {
+          this.completedMissions.add(m.id);
+        }
       }
     }
 
     const doneCount = this.completedMissions.size;
+    const redPad = BOARD_TEST_PADS.find((p) => p.id === this.redPadId) ?? BOARD_TEST_PADS[1];
+    const blackPad = BOARD_TEST_PADS.find((p) => p.id === this.blackPadId) ?? BOARD_TEST_PADS[2];
 
     const dialOptions: Array<{ id: MeterDialMode; label: string; sub: string; angleDeg: number }> = [
       { id: 'OFF', label: 'OFF', sub: 'Aus', angleDeg: -120 },
@@ -304,27 +351,61 @@ export class MultimeterView {
 
     this.root.innerHTML = `
       <div class="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-5">
-        <!-- Header -->
-        <div class="eng-card rounded-2xl border p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-xl">📟</span>
-              <h2 class="text-base sm:text-lg font-bold eng-text-main">Multimeter-Schule &amp; Interaktiver Mess-Trainer</h2>
-              <span class="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/45 text-amber-300">
-                ${doneCount} / ${MISSIONS.length} Mess-Aufgaben gelöst
-              </span>
+        <!-- Header mit Modus-Umschalter -->
+        <div class="eng-card rounded-2xl border p-5 flex flex-col gap-3.5">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xl">📟</span>
+                <h2 class="text-base sm:text-lg font-bold eng-text-main">Interaktives Multimeter-Labor</h2>
+                <span class="text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/45 text-amber-300">
+                  ${this.tabMode === 'board' ? `${this.detectiveSolvedCount} Fehler gefunden` : `${doneCount} / ${MISSIONS.length} Aufgaben gelöst`}
+                </span>
+              </div>
+              <p class="mt-1 text-xs sm:text-[13px] eng-text-muted max-w-3xl">
+                Setze die rote &amp; schwarze Messspitze frei auf alle 9 Testpunkte der Platine, öffne Jumper J1 für echte Reihen-Strommessung
+                oder spüre versteckte Schaltungsfehler im Fehler-Detektiv auf!
+              </p>
             </div>
-            <p class="mt-1 text-xs sm:text-[13px] eng-text-muted max-w-3xl">
-              Lerne, wie ein Digital-Multimeter innen funktioniert und wie du Spannung (parallel), Widerstand (stromlos),
-              Durchgang/LEDs und Strom (in Reihe!) sicher misst — inklusive echter Sicherungs- &amp; Fehlbedienungs-Simulation!
-            </p>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <button type="button" data-mm-action="toggle-sound" class="eng-btn-neutral px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer">
+                ${this.soundEnabled ? '🔊 Piepton: EIN' : '🔇 Piepton: AUS'}
+              </button>
+              ${
+                this.tabMode === 'stations'
+                  ? `<button type="button" data-mm-action="auto-setup" class="px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer bg-emerald-500/15 border-emerald-500/45 text-emerald-400 hover:bg-emerald-500/25">
+                       ✨ Richtig einstellen
+                     </button>`
+                  : `<button type="button" data-mm-action="start-detective" class="px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-300 hover:bg-fuchsia-500/30">
+                       🐛 Zufallsfehler einbauen!
+                     </button>`
+              }
+            </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <button type="button" data-mm-action="toggle-sound" class="eng-btn-neutral px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer">
-              ${this.soundEnabled ? '🔊 Piepton: EIN' : '🔇 Piepton: AUS'}
+
+          <!-- Modus-Umschalter: Interaktive Mess-Platine vs. 7 Geführte Stationen -->
+          <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-500/20">
+            <button
+              type="button"
+              data-mm-tab="board"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                this.tabMode === 'board'
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.22)]'
+                  : 'eng-btn-neutral'
+              }"
+            >
+              🎯 Interaktive Mess-Platine (Spitzen frei setzen &amp; Fehler finden)
             </button>
-            <button type="button" data-mm-action="auto-setup" class="px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer bg-emerald-500/15 border-emerald-500/45 text-emerald-400 hover:bg-emerald-500/25">
-              ✨ Richtig einstellen
+            <button
+              type="button"
+              data-mm-tab="stations"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition ${
+                this.tabMode === 'stations'
+                  ? 'bg-cyan-500/20 border-cyan-400 eng-text-accent shadow-[0_0_10px_rgba(56,189,248,0.22)]'
+                  : 'eng-btn-neutral'
+              }"
+            >
+              📋 7 Geführte Mess-Stationen (${doneCount}/${MISSIONS.length})
             </button>
           </div>
         </div>
@@ -461,9 +542,183 @@ export class MultimeterView {
             </div>
           </div>
 
-          <!-- RECHTER BLOCK: Messstation wählen, Schaltung & Messspitzen steuern, Live-Diagnose & Aufgaben -->
+          <!-- RECHTER BLOCK: Entweder Interaktive Mess-Platine ODER 7 Geführte Mess-Stationen -->
           <div class="lg:col-span-7 flex flex-col gap-4">
-            <!-- 7 Messstationen -->
+            ${
+              this.tabMode === 'board'
+                ? `
+            <!-- MODUS 1: INTERAKTIVE FR-4 MESS-PLATINE -->
+            <div class="eng-card rounded-2xl border p-4 flex flex-col gap-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-mm-probe="red"
+                    class="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition ${
+                      this.activeProbe === 'red'
+                        ? 'bg-red-500/25 border-red-400 text-red-300'
+                        : 'eng-btn-neutral'
+                    }"
+                  >
+                    🔴 Rote Spitze bewegen
+                  </button>
+                  <button
+                    type="button"
+                    data-mm-probe="black"
+                    class="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition ${
+                      this.activeProbe === 'black'
+                        ? 'bg-slate-400/25 border-slate-300 text-slate-100'
+                        : 'eng-btn-neutral'
+                    }"
+                  >
+                    ⚫ Schwarze Spitze bewegen
+                  </button>
+                  <button
+                    type="button"
+                    data-mm-action="swap-board-probes"
+                    class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer"
+                  >
+                    🔀 Tauschen
+                  </button>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-mm-action="toggle-power"
+                    class="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition ${
+                      this.circuitPowered
+                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400'
+                        : 'bg-slate-700/40 border-slate-500/50 eng-text-muted'
+                    }"
+                  >
+                    ${this.circuitPowered ? '⚡ Platine: EIN' : '⭘ Platine: AUS'}
+                  </button>
+                  <button
+                    type="button"
+                    data-mm-action="toggle-jumper"
+                    class="px-2.5 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition ${
+                      this.jumperJ1Closed
+                        ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-300'
+                        : 'bg-orange-500/20 border-orange-400 text-orange-300'
+                    }"
+                    title="Jumper J1 öffnen, um mit dem Multimeter in Reihe Strom zu messen!"
+                  >
+                    ${this.jumperJ1Closed ? '🔗 J1: ZU' : '⛓️ J1: OFFEN'}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interaktive FR-4 Platine (SVG mit 9 anklickbaren Pads + Jumper J1 + LED) -->
+              ${renderInteractiveBoardSvg({
+                redPadId: this.redPadId,
+                blackPadId: this.blackPadId,
+                activeProbe: this.activeProbe,
+                circuitPowered: this.circuitPowered,
+                jumperJ1Closed: this.jumperJ1Closed,
+                ledLitByCircuit: boardEval.ledLitByCircuit,
+                ledGlowByDiodeTest: boardEval.ledGlowByDiodeTest,
+                sparkOnBoard: boardEval.sparkOnBoard,
+              })}
+
+              <!-- Aktuelle Spitzen-Positionen -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div class="rounded-lg bg-red-500/12 border border-red-500/35 px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span class="font-mono font-bold text-red-400">🔴 Rot: ${redPad.label}</span>
+                  <span class="eng-text-body truncate">${redPad.name}</span>
+                </div>
+                <div class="rounded-lg bg-slate-500/15 border border-slate-400/35 px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span class="font-mono font-bold text-slate-300">⚫ Schwarz: ${blackPad.label}</span>
+                  <span class="eng-text-body truncate">${blackPad.name}</span>
+                </div>
+              </div>
+
+              <!-- Live-Auswertung -->
+              <div data-mm-feedback class="rounded-xl border p-3.5 ${toneBannerCls}">
+                <div class="text-xs font-bold flex items-center justify-between gap-2">
+                  <span>${reading.explanationTitle}</span>
+                  ${
+                    this.fuseBlown
+                      ? `<button type="button" data-mm-action="replace-fuse" class="px-2 py-0.5 rounded bg-red-500 text-white text-[11px] font-bold cursor-pointer">🔧 Sicherung ersetzen</button>`
+                      : ''
+                  }
+                </div>
+                <p class="mt-1 text-xs leading-relaxed opacity-95">${reading.explanationBody}</p>
+              </div>
+            </div>
+
+            <!-- Fehler-Detektiv ODER Entdecker-Tipps -->
+            <div class="eng-card rounded-2xl border p-4 flex flex-col gap-3">
+              ${
+                this.detectiveActive
+                  ? `
+                <div class="flex items-center justify-between gap-2">
+                  <div class="text-xs font-bold text-fuchsia-300 flex items-center gap-2">
+                    <span>🕵️ Fehler-Detektiv aktiv!</span>
+                    <span class="text-[10.5px] font-mono eng-text-muted">Miss die Platine durch und finde den Defekt:</span>
+                  </div>
+                  <button type="button" data-mm-action="clear-fault" class="eng-btn-neutral px-2 py-1 rounded-lg border text-[11px] cursor-pointer">
+                    Platine reparieren
+                  </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  ${BOARD_FAULT_SCENARIOS.filter((f) => f.id !== 'none')
+                    .map(
+                      (f) => `
+                    <button
+                      type="button"
+                      data-mm-guess="${f.id}"
+                      class="eng-btn-neutral px-3 py-2 rounded-xl border text-left text-xs font-semibold cursor-pointer hover:border-fuchsia-400 transition"
+                    >
+                      🔎 ${f.title}
+                    </button>
+                  `,
+                    )
+                    .join('')}
+                </div>
+                ${
+                  this.detectiveFeedback
+                    ? `<div data-mm-detective-result class="rounded-xl border px-3 py-2 text-xs font-semibold ${
+                        this.detectiveFeedback.tone === 'ok'
+                          ? 'bg-emerald-500/15 border-emerald-400 text-emerald-300'
+                          : 'bg-red-500/15 border-red-400 text-red-300'
+                      }">${this.detectiveFeedback.text}</div>`
+                    : ''
+                }
+              `
+                  : `
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                    🧪 Probiere diese 4 Mess-Tricks direkt auf der Platine aus!
+                  </span>
+                  <button type="button" data-mm-action="start-detective" class="text-[11px] font-bold text-fuchsia-300 underline cursor-pointer">
+                    🐛 Fehler-Detektiv starten →
+                  </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11.5px]">
+                  <button type="button" data-mm-preset="r1-drop" class="eng-card-soft rounded-xl border p-2.5 text-left hover:border-cyan-400 cursor-pointer transition">
+                    <div class="font-bold eng-text-main">1. Spannungsabfall an R1 (1,30 V)</div>
+                    <div class="eng-text-muted mt-0.5">Rot auf J1-B, Schwarz auf LED+ im V⎓-Modus</div>
+                  </button>
+                  <button type="button" data-mm-preset="adc-div" class="eng-card-soft rounded-xl border p-2.5 text-left hover:border-cyan-400 cursor-pointer transition">
+                    <div class="font-bold eng-text-main">2. Spannungsteiler prüfen (1,65 V)</div>
+                    <div class="eng-text-muted mt-0.5">Rot auf ADC, Schwarz auf TP3 (GND)</div>
+                  </button>
+                  <button type="button" data-mm-preset="series-ma" class="eng-card-soft rounded-xl border p-2.5 text-left hover:border-amber-400 cursor-pointer transition">
+                    <div class="font-bold text-amber-300">3. Echte Reihen-Strommessung (5,9 mA)</div>
+                    <div class="eng-text-muted mt-0.5">Jumper J1 öffnen → mA an J1-A ↔ J1-B!</div>
+                  </button>
+                  <button type="button" data-mm-preset="diode-led" class="eng-card-soft rounded-xl border p-2.5 text-left hover:border-rose-400 cursor-pointer transition">
+                    <div class="font-bold text-rose-300">4. LED1 zum Glimmen bringen (1,98 V)</div>
+                    <div class="eng-text-muted mt-0.5">Platine AUS → 🔊 ►| an LED+ ↔ GND2!</div>
+                  </button>
+                </div>
+              `
+              }
+            </div>
+                `
+                : `
+            <!-- MODUS 2: 7 GEFÜHRTE MESS-STATIONEN -->
             <div class="eng-card rounded-2xl border p-4 flex flex-col gap-3">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-[11px] font-mono uppercase tracking-wider eng-text-accent font-bold">
@@ -588,6 +843,8 @@ export class MultimeterView {
                 }).join('')}
               </div>
             </div>
+                `
+            }
           </div>
         </div>
 
@@ -1095,6 +1352,13 @@ export class MultimeterView {
   }
 
   private bindEvents(): void {
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mm-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.tabMode = btn.dataset.mmTab as MultimeterTabMode;
+        this.render();
+      });
+    });
+
     this.root.querySelectorAll<HTMLButtonElement>('[data-mm-dial]').forEach((btn) => {
       btn.addEventListener('click', () => {
         this.dial = btn.dataset.mmDial as MeterDialMode;
@@ -1113,6 +1377,134 @@ export class MultimeterView {
       btn.addEventListener('click', () => {
         this.stationId = btn.dataset.mmStation as StationId;
         this.probesSwapped = false;
+        this.render();
+      });
+    });
+
+    // Interaktive Mess-Platine: Spitzen-Toggle & Klick/Rechtsklick auf die 9 Test-Pads
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mm-probe]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.activeProbe = btn.dataset.mmProbe as 'red' | 'black';
+        this.render();
+      });
+    });
+
+    this.root.querySelectorAll<SVGGElement>('[data-mm-pad]').forEach((padEl) => {
+      padEl.addEventListener('click', () => {
+        const padId = padEl.dataset.mmPad;
+        if (!padId) return;
+        if (this.activeProbe === 'red') {
+          this.redPadId = padId;
+        } else {
+          this.blackPadId = padId;
+        }
+        this.render();
+      });
+      padEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const padId = padEl.dataset.mmPad;
+        if (!padId) return;
+        this.blackPadId = padId;
+        this.render();
+      });
+    });
+
+    this.root.querySelector('[data-mm-action="swap-board-probes"]')?.addEventListener('click', () => {
+      const tmp = this.redPadId;
+      this.redPadId = this.blackPadId;
+      this.blackPadId = tmp;
+      this.render();
+    });
+
+    this.root.querySelectorAll('[data-mm-action="toggle-jumper"]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.jumperJ1Closed = !this.jumperJ1Closed;
+        this.render();
+      });
+    });
+
+    // Fehler-Detektiv starten, raten & reparieren
+    this.root.querySelectorAll('[data-mm-action="start-detective"]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const faults: BoardFaultId[] = [
+          'blown-fuse-f1',
+          'open-resistor-r1',
+          'dead-ldo-3v3',
+          'short-3v3-gnd',
+        ];
+        const choices = faults.filter((f) => f !== this.boardFault);
+        this.boardFault = choices[Math.floor(Math.random() * choices.length)];
+        this.detectiveActive = true;
+        this.detectiveFeedback = null;
+        this.jumperJ1Closed = true;
+        this.circuitPowered = true;
+        this.fuseBlown = null;
+        this.redJack = 'V_OHM_MA';
+        this.dial = 'VDC';
+        this.render();
+      });
+    });
+
+    this.root.querySelector('[data-mm-action="clear-fault"]')?.addEventListener('click', () => {
+      this.boardFault = 'none';
+      this.detectiveActive = false;
+      this.detectiveFeedback = null;
+      this.render();
+    });
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mm-guess]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const guess = btn.dataset.mmGuess as BoardFaultId;
+        const actual = BOARD_FAULT_SCENARIOS.find((f) => f.id === this.boardFault);
+        if (guess === this.boardFault) {
+          this.detectiveSolvedCount += 1;
+          this.detectiveFeedback = {
+            tone: 'ok',
+            text: `🎉 Volltreffer! „${actual?.title}“ korrekt mit dem Multimeter diagnostiziert! (${actual?.diagnosticHint})`,
+          };
+        } else {
+          this.detectiveFeedback = {
+            tone: 'danger',
+            text: `❌ Noch nicht ganz — miss noch mal genau nach! Tipp: Prüfe erst TP1 (+5V), F1-B und TP2 (+3,3V), oder schalte die Platine AUS für Ω / 🔊!`,
+          };
+        }
+        this.render();
+      });
+    });
+
+    // 4 Schnell-Presets auf der interaktiven Platine
+    this.root.querySelectorAll<HTMLButtonElement>('[data-mm-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.mmPreset;
+        this.boardFault = 'none';
+        this.detectiveActive = false;
+        this.fuseBlown = null;
+        this.redJack = 'V_OHM_MA';
+        if (preset === 'r1-drop') {
+          this.circuitPowered = true;
+          this.jumperJ1Closed = true;
+          this.dial = 'VDC';
+          this.redPadId = 'TP5';
+          this.blackPadId = 'TP6';
+        } else if (preset === 'adc-div') {
+          this.circuitPowered = true;
+          this.jumperJ1Closed = true;
+          this.dial = 'VDC';
+          this.redPadId = 'TP8';
+          this.blackPadId = 'TP3';
+        } else if (preset === 'series-ma') {
+          this.circuitPowered = true;
+          this.jumperJ1Closed = false;
+          this.dial = 'MA';
+          this.redPadId = 'TP4';
+          this.blackPadId = 'TP5';
+        } else if (preset === 'diode-led') {
+          this.circuitPowered = false;
+          this.jumperJ1Closed = true;
+          this.dial = 'CONT';
+          this.redPadId = 'TP6';
+          this.blackPadId = 'TP7';
+        }
         this.render();
       });
     });

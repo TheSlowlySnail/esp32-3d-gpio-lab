@@ -51,6 +51,8 @@ import { ControlsPanel } from './ui/ControlsPanel';
 import { FavoritesView } from './ui/FavoritesView';
 import { FritzingSchematicPanel } from './ui/FritzingSchematic';
 import { FunnyIdeasView } from './ui/FunnyIdeasView';
+import { GLOSSARY_ENTRIES } from './ui/GlossaryData';
+import { GlossaryView } from './ui/GlossaryView';
 import { Oscilloscope } from './ui/Oscilloscope';
 import { SandboxPanel } from './ui/SandboxPanel';
 import { SolderingView } from './ui/SolderingView';
@@ -172,6 +174,7 @@ class LearnEsp32App {
   private funnyView!: FunnyIdeasView;
   private favoritesView!: FavoritesView;
   private solderingView!: SolderingView;
+  private glossaryView!: GlossaryView;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
@@ -185,6 +188,7 @@ class LearnEsp32App {
   private funnyMountEl!: HTMLElement;
   private favoritesMountEl!: HTMLElement;
   private solderingMountEl!: HTMLElement;
+  private glossaryMountEl!: HTMLElement;
   private favCountBadgeEl!: HTMLElement;
   private controlsMountEl!: HTMLElement;
   private sandboxMountEl!: HTMLElement;
@@ -438,7 +442,7 @@ class LearnEsp32App {
             type="button"
             role="tab"
             data-mode="soldering"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>🔥</span>
             <span>Löten</span>
@@ -446,8 +450,18 @@ class LearnEsp32App {
           <button
             type="button"
             role="tab"
+            data-mode="glossary"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>📖</span>
+            <span>Grundlagen</span>
+            <span class="text-[10px] font-mono opacity-80">(${GLOSSARY_ENTRIES.length})</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
             data-mode="favorites"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>⭐</span>
             <span>Favoriten</span>
@@ -517,6 +531,9 @@ class LearnEsp32App {
 
       <!-- Rubrik: Löt-Werkstatt & Interaktiver Löt-Trainer -->
       <section data-mount="soldering" class="hidden flex-1 overflow-y-auto"></section>
+
+      <!-- Rubrik: E-Technik Grundlagen & Fachbegriffe (Glossar + Live-Rechner) -->
+      <section data-mount="glossary" class="hidden flex-1 overflow-y-auto"></section>
 
       <!-- Component Registry Modal -->
       <div data-modal="registry" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm items-center justify-center p-4">
@@ -665,6 +682,10 @@ class LearnEsp32App {
                   <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Alt + ← / →</kbd>
                 </div>
                 <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">E-Technik Grundlagen &amp; Glossar</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">G</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
                   <span class="eng-text-body">Pin-Eigenschaften anzeigen</span>
                   <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Maus-Hover</kbd>
                 </div>
@@ -702,6 +723,7 @@ class LearnEsp32App {
     this.funnyMountEl = this.root.querySelector('[data-mount="funny"]')!;
     this.favoritesMountEl = this.root.querySelector('[data-mount="favorites"]')!;
     this.solderingMountEl = this.root.querySelector('[data-mount="soldering"]')!;
+    this.glossaryMountEl = this.root.querySelector('[data-mount="glossary"]')!;
     this.favCountBadgeEl = this.root.querySelector('[data-fav-count]')!;
     this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
     this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
@@ -773,6 +795,16 @@ class LearnEsp32App {
       },
     });
     this.solderingView = new SolderingView(this.solderingMountEl);
+    this.glossaryView = new GlossaryView(this.glossaryMountEl, {
+      onTryInApp: (mode, lessonId) => {
+        if (mode === 'lessons' && lessonId) {
+          this.setAppMode('lessons');
+          this.selectLesson(lessonId, false);
+        } else {
+          this.setAppMode(mode);
+        }
+      },
+    });
     this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
       onSelectTool: (tool) => {
         this.sandboxTool = tool;
@@ -1430,6 +1462,13 @@ class LearnEsp32App {
         return;
       }
 
+      // E-Technik Grundlagen & Fachbegriffe öffnen (G)
+      if (e.code === 'KeyG') {
+        e.preventDefault();
+        this.setAppMode(this.appMode === 'glossary' ? 'lessons' : 'glossary');
+        return;
+      }
+
       // Mit / Ohne Breadboard (B) in Lektionen
       if (e.code === 'KeyB' && this.appMode === 'lessons') {
         e.preventDefault();
@@ -1570,6 +1609,10 @@ class LearnEsp32App {
     if (mode === 'soldering') {
       return;
     }
+    if (mode === 'glossary') {
+      this.glossaryView.render();
+      return;
+    }
 
     if (mode === 'lessons') {
       const lesson = getLessonById(this.params.topology);
@@ -1586,7 +1629,10 @@ class LearnEsp32App {
   private updateModeUi(): void {
     const isLessons = this.appMode === 'lessons';
     const isFullGallery =
-      this.appMode === 'funny' || this.appMode === 'favorites' || this.appMode === 'soldering';
+      this.appMode === 'funny' ||
+      this.appMode === 'favorites' ||
+      this.appMode === 'soldering' ||
+      this.appMode === 'glossary';
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       const m = btn.dataset.mode as AppMode;
@@ -1601,14 +1647,16 @@ class LearnEsp32App {
                 ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.25)]'
                 : m === 'soldering'
                   ? 'bg-orange-500/22 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.28)]'
-                  : m === 'favorites'
-                    ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
-                    : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
-        btn.className = `px-3 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeStyle}`;
+                  : m === 'glossary'
+                    ? 'bg-sky-500/22 border-sky-400 text-sky-300 shadow-[0_0_12px_rgba(56,189,248,0.28)]'
+                    : m === 'favorites'
+                      ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
+                      : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+        btn.className = `px-2.5 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeStyle}`;
         btn.setAttribute('aria-selected', 'true');
       } else {
         btn.className =
-          'eng-btn-neutral px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap';
+          'eng-btn-neutral px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap';
         btn.setAttribute('aria-selected', 'false');
       }
     });
@@ -1617,6 +1665,7 @@ class LearnEsp32App {
     this.funnyMountEl.classList.toggle('hidden', this.appMode !== 'funny');
     this.favoritesMountEl.classList.toggle('hidden', this.appMode !== 'favorites');
     this.solderingMountEl.classList.toggle('hidden', this.appMode !== 'soldering');
+    this.glossaryMountEl.classList.toggle('hidden', this.appMode !== 'glossary');
     this.sceneManager.setPaused(isFullGallery);
     this.solderingView.setActive(this.appMode === 'soldering');
 
@@ -1663,6 +1712,9 @@ class LearnEsp32App {
     } else if (this.appMode === 'soldering') {
       this.modeSubbarHintEl.textContent =
         'Interaktiver Löt-Trainer: Temperatur regeln, Pad erhitzen, Zinn zuführen & perfekte Kegel üben!';
+    } else if (this.appMode === 'glossary') {
+      this.modeSubbarHintEl.textContent =
+        `${GLOSSARY_ENTRIES.length} E-Technik-Grundlagen & Fachbegriffe (Pull-Down, Pull-Up, Ohm, MOSFET, I²C…) + Live-Vorwiderstands-Rechner!`;
     } else {
       this.modeSubbarHintEl.textContent =
         'Deine persönliche Sammlung aus Lieblings-Sensoren, Aktoren, Lektionen, Projekten & Funny-Ideen';

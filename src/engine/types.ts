@@ -193,6 +193,8 @@ export interface SceneExplanation {
   whyItHappens: string;
 }
 
+export type BuildStyleMode = 'breadboard' | 'wago-solder' | 'solder-only';
+
 export interface CircuitParameters {
   boardId: EspBoardId;
   topology: CircuitTopologyId;
@@ -201,8 +203,9 @@ export interface CircuitParameters {
   // Virtuell entfernte Bauteile in der aktiven Lektion
   removedParts: string[];
 
-  // Aufbau-Modus: mit Steckbrett oder direkte Verdrahtung (WAGO / Löten)
+  // Aufbau-Modus: mit Steckbrett oder direkte Verdrahtung (WAGO + Löten / Nur Gelötet)
   withoutBreadboard: boolean;
+  buildStyle: BuildStyleMode;
 
   // 01: LED & Vorwiderstand
   gpioOutputHigh: boolean;

@@ -7,6 +7,7 @@ import {
   getPinKindColorHex,
 } from './engine';
 import type {
+  BuildStyleMode,
   CircuitParameters,
   CircuitTopologyId,
   EspBoardId,
@@ -186,6 +187,7 @@ class LearnEsp32App {
   private themeBtnEl!: HTMLButtonElement;
   private roomDimBtnEl!: HTMLButtonElement;
   private noBreadboardBtnEl!: HTMLButtonElement;
+  private buildStyleWrapEl!: HTMLElement;
   private workspaceMainEl!: HTMLElement;
   private funnyMountEl!: HTMLElement;
   private favoritesMountEl!: HTMLElement;
@@ -519,6 +521,39 @@ class LearnEsp32App {
               <span class="opacity-40">•</span>
               <span data-hint="interactive" class="eng-text-accent">ESP32 3,3V Aktiv</span>
             </div>
+
+            <!-- 1-Klick Aufbau-Umschalter direkt im 3D-Viewport: Breadboard | WAGO + Löten | Nur Gelötet -->
+            <div
+              data-wrap="build-style"
+              class="eng-hud-card absolute bottom-3 right-3 z-10 flex items-center gap-1 p-1 rounded-xl border backdrop-blur-md shadow-lg"
+              role="group"
+              aria-label="Aufbau-Art wählen"
+            >
+              <button
+                type="button"
+                data-build-style="breadboard"
+                title="Klassisches Steckbrett (lötfrei)"
+                class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition whitespace-nowrap"
+              >
+                🧩 Breadboard
+              </button>
+              <button
+                type="button"
+                data-build-style="wago-solder"
+                title="Ohne Breadboard: WAGO 221 Hebelklemmen (+V/GND) + gelötete Zinn-Brücken auf FR-4-Platine"
+                class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition whitespace-nowrap"
+              >
+                🟠 WAGO + Löten
+              </button>
+              <button
+                type="button"
+                data-build-style="solder-only"
+                title="Komplett gelötet ohne WAGO: FR-4 Lochrasterplatine mit verzinnten Sammelschienen & Zinn-Kegeln"
+                class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition whitespace-nowrap"
+              >
+                🔥 Nur Gelötet
+              </button>
+            </div>
           </section>
 
           <!-- Bottom Instruments Dock: Oscilloscope + Live Code Generator -->
@@ -738,6 +773,7 @@ class LearnEsp32App {
     this.themeBtnEl = this.root.querySelector('[data-action="toggle-theme"]')!;
     this.roomDimBtnEl = this.root.querySelector('[data-action="toggle-room-dim"]')!;
     this.noBreadboardBtnEl = this.root.querySelector('[data-action="toggle-breadboard"]')!;
+    this.buildStyleWrapEl = this.root.querySelector('[data-wrap="build-style"]')!;
     this.workspaceMainEl = this.root.querySelector('[data-wrap="workspace"]')!;
     this.funnyMountEl = this.root.querySelector('[data-mount="funny"]')!;
     this.favoritesMountEl = this.root.querySelector('[data-mount="favorites"]')!;
@@ -1297,10 +1333,20 @@ class LearnEsp32App {
       }
     });
 
-    this.noBreadboardBtnEl.addEventListener('click', () => {
-      const next = !this.params.withoutBreadboard;
-      this.updateBreadboardToggleUi(next);
-      this.updateParams({ withoutBreadboard: next });
+    const cycleBuildStyle = () => {
+      const order: BuildStyleMode[] = ['breadboard', 'wago-solder', 'solder-only'];
+      const cur = this.params.buildStyle ?? (this.params.withoutBreadboard ? 'wago-solder' : 'breadboard');
+      const next = order[(order.indexOf(cur) + 1) % order.length];
+      this.setBuildStyle(next);
+    };
+
+    this.noBreadboardBtnEl.addEventListener('click', cycleBuildStyle);
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-build-style]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const style = btn.dataset.buildStyle as BuildStyleMode;
+        this.setBuildStyle(style);
+      });
     });
 
     this.root.querySelector('[data-action="open-schematic"]')?.addEventListener('click', () => {
@@ -1497,12 +1543,10 @@ class LearnEsp32App {
         return;
       }
 
-      // Mit / Ohne Breadboard (B) in Lektionen
+      // Aufbau-Art durchschalten (B): Breadboard -> WAGO + Löten -> Nur Gelötet
       if (e.code === 'KeyB' && this.appMode === 'lessons') {
         e.preventDefault();
-        const next = !this.params.withoutBreadboard;
-        this.updateBreadboardToggleUi(next);
-        this.updateParams({ withoutBreadboard: next });
+        cycleBuildStyle();
         return;
       }
 
@@ -1707,8 +1751,10 @@ class LearnEsp32App {
 
     this.lessonPickerWrapEl.classList.toggle('hidden', !isLessons);
     this.noBreadboardBtnEl.classList.toggle('hidden', !isLessons);
+    this.buildStyleWrapEl.classList.toggle('hidden', !isLessons);
     this.controlsMountEl.classList.toggle('hidden', !isLessons);
     this.sandboxMountEl.classList.toggle('hidden', isLessons || isFullGallery);
+    this.updateBuildStyleUi(this.params.buildStyle);
 
     if (this.appMode === 'lessons') {
       this.modeSubbarHintEl.textContent =
@@ -1999,20 +2045,51 @@ class LearnEsp32App {
     }
   }
 
-  private updateBreadboardToggleUi(withoutBreadboard: boolean): void {
+  private setBuildStyle(style: BuildStyleMode): void {
+    this.updateBuildStyleUi(style);
+    this.updateParams({
+      buildStyle: style,
+      withoutBreadboard: style !== 'breadboard',
+    });
+  }
+
+  private updateBuildStyleUi(style: BuildStyleMode): void {
     const dot = this.noBreadboardBtnEl.querySelector('[data-bb-dot]');
     const label = this.noBreadboardBtnEl.querySelector('[data-bb-label]');
-    if (withoutBreadboard) {
+
+    if (style === 'wago-solder') {
       this.noBreadboardBtnEl.className =
-        'px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-semibold whitespace-nowrap bg-orange-500/18 border-orange-500 text-orange-500';
+        'px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-semibold whitespace-nowrap bg-orange-500/18 border-orange-500 text-orange-400';
       if (dot) dot.className = 'w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_#f97316]';
-      if (label) label.textContent = 'Ohne Breadboard ✓';
+      if (label) label.textContent = 'WAGO + Löten ✓';
+    } else if (style === 'solder-only') {
+      this.noBreadboardBtnEl.className =
+        'px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-semibold whitespace-nowrap bg-emerald-500/18 border-emerald-400 text-emerald-300';
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]';
+      if (label) label.textContent = 'Nur Gelötet ✓';
     } else {
       this.noBreadboardBtnEl.className =
         'eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap';
       if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-400';
       if (label) label.textContent = 'Ohne Breadboard';
     }
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-build-style]').forEach((btn) => {
+      const m = btn.dataset.buildStyle as BuildStyleMode;
+      const active = m === style;
+      if (active) {
+        const cls =
+          m === 'wago-solder'
+            ? 'bg-orange-500/22 border-orange-400 text-orange-300 font-bold'
+            : m === 'solder-only'
+              ? 'bg-emerald-500/22 border-emerald-400 text-emerald-300 font-bold'
+              : 'bg-cyan-500/22 border-cyan-400 eng-text-accent font-bold';
+        btn.className = `px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer transition whitespace-nowrap ${cls}`;
+      } else {
+        btn.className =
+          'eng-btn-neutral px-2.5 py-1 rounded-lg border border-transparent text-[11px] font-medium cursor-pointer transition whitespace-nowrap opacity-80 hover:opacity-100';
+      }
+    });
   }
 
   private openSchematicModal(): void {

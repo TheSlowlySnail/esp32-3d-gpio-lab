@@ -6,23 +6,40 @@ export interface JumperWireOptions {
   color: number;
   arcHeight?: number;
   lateralOffset?: number;
+  /** Wenn true, wird am Start/Ende statt Dupont-Stecker eine gelötete Schrumpfschlauch-/Zinn-Verbindung gerendert */
+  solderStart?: boolean;
+  solderEnd?: boolean;
 }
 
 /**
- * Automatisch geroutetes 3D-Jumperkabel (CatmullRomCurve3 + TubeGeometry)
- * mit schwarzen Dupont-Steckerhülsen und metallischen Steckstiften an beiden Enden.
+ * Automatisch geroutetes 3D-Kabel (CatmullRomCurve3 + TubeGeometry):
+ * - Auf Breadboard / Board-Pins: authentische Dupont-Steckerhülsen mit Crimp-Fenster & Knickschutz
+ * - Auf Lötplatine / WAGO: abisoliertes verzinntes Kabelende + Schrumpfschlauch + glänzender Zinn-Kegel!
  */
 export class JumperWireMesh {
   public readonly group = new THREE.Group();
 
   constructor(options: JumperWireOptions) {
     this.group.name = 'Jumper_Wire';
-    const { start, end, color, arcHeight = 1.25, lateralOffset = 0 } = options;
+    const {
+      start,
+      end,
+      color,
+      arcHeight = 1.25,
+      lateralOffset = 0,
+      solderStart = false,
+      solderEnd = false,
+    } = options;
 
     const pinMat = new THREE.MeshStandardMaterial({
       color: 0xdbe2ea,
       metalness: 0.92,
       roughness: 0.18,
+    });
+    const solderMat = new THREE.MeshStandardMaterial({
+      color: 0xe6edf5,
+      metalness: 0.95,
+      roughness: 0.14,
     });
     const housingMat = new THREE.MeshStandardMaterial({
       color: 0x111827,
@@ -49,33 +66,58 @@ export class JumperWireMesh {
     const strainReliefGeo = new THREE.CylinderGeometry(0.062, 0.072, 0.09, 12);
     const bootRingGeo = new THREE.CylinderGeometry(0.056, 0.062, 0.06, 12);
 
-    for (const pt of [start, end]) {
-      const pin = new THREE.Mesh(pinGeo, pinMat);
-      pin.position.set(pt.x, pt.y + 0.02, pt.z);
-      this.group.add(pin);
+    const shrinkGeo = new THREE.CylinderGeometry(0.062, 0.068, 0.22, 12);
+    const solderConeGeo = new THREE.CylinderGeometry(0.032, 0.088, 0.1, 14);
+    const copperLeadGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.12, 8);
 
-      const housing = new THREE.Mesh(housingGeo, housingMat);
-      housing.position.set(pt.x, pt.y + housingHeight / 2 + 0.04, pt.z);
-      housing.castShadow = true;
-      this.group.add(housing);
+    const endpoints: Array<{ pt: THREE.Vector3; isSolder: boolean }> = [
+      { pt: start, isSolder: solderStart },
+      { pt: end, isSolder: solderEnd },
+    ];
 
-      // Authentic metallic Dupont locking-tab glint on the side of the black housing
-      const crimp = new THREE.Mesh(crimpWindowGeo, pinMat);
-      crimp.position.set(pt.x, pt.y + housingHeight * 0.56 + 0.04, pt.z);
-      this.group.add(crimp);
+    for (const { pt, isSolder } of endpoints) {
+      if (isSolder) {
+        // Verzinntes Kabelende direkt im glänzenden Lötzinn-Kegel + schwarzer Schrumpfschlauch
+        const cone = new THREE.Mesh(solderConeGeo, solderMat);
+        cone.position.set(pt.x, pt.y + 0.04, pt.z);
+        this.group.add(cone);
 
-      // Top molded collar + color-matched strain relief boot
-      const collar = new THREE.Mesh(strainReliefGeo, collarMat);
-      collar.position.set(pt.x, pt.y + housingHeight + 0.065, pt.z);
-      this.group.add(collar);
+        const lead = new THREE.Mesh(copperLeadGeo, pinMat);
+        lead.position.set(pt.x, pt.y + 0.11, pt.z);
+        this.group.add(lead);
 
-      const boot = new THREE.Mesh(bootRingGeo, wireMat);
-      boot.position.set(pt.x, pt.y + housingHeight + 0.125, pt.z);
-      this.group.add(boot);
+        const shrink = new THREE.Mesh(shrinkGeo, housingMat);
+        shrink.position.set(pt.x, pt.y + 0.24, pt.z);
+        shrink.castShadow = true;
+        this.group.add(shrink);
+      } else {
+        const pin = new THREE.Mesh(pinGeo, pinMat);
+        pin.position.set(pt.x, pt.y + 0.02, pt.z);
+        this.group.add(pin);
+
+        const housing = new THREE.Mesh(housingGeo, housingMat);
+        housing.position.set(pt.x, pt.y + housingHeight / 2 + 0.04, pt.z);
+        housing.castShadow = true;
+        this.group.add(housing);
+
+        const crimp = new THREE.Mesh(crimpWindowGeo, pinMat);
+        crimp.position.set(pt.x, pt.y + housingHeight * 0.56 + 0.04, pt.z);
+        this.group.add(crimp);
+
+        const collar = new THREE.Mesh(strainReliefGeo, collarMat);
+        collar.position.set(pt.x, pt.y + housingHeight + 0.065, pt.z);
+        this.group.add(collar);
+
+        const boot = new THREE.Mesh(bootRingGeo, wireMat);
+        boot.position.set(pt.x, pt.y + housingHeight + 0.125, pt.z);
+        this.group.add(boot);
+      }
     }
 
-    const p0 = new THREE.Vector3(start.x, start.y + housingHeight + 0.14, start.z);
-    const p4 = new THREE.Vector3(end.x, end.y + housingHeight + 0.14, end.z);
+    const startLift = solderStart ? 0.34 : housingHeight + 0.14;
+    const endLift = solderEnd ? 0.34 : housingHeight + 0.14;
+    const p0 = new THREE.Vector3(start.x, start.y + startLift, start.z);
+    const p4 = new THREE.Vector3(end.x, end.y + endLift, end.z);
 
     const dir = new THREE.Vector3().subVectors(p4, p0);
     const dist = dir.length();

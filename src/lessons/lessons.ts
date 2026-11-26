@@ -931,6 +931,7 @@ export function createInitialCircuitParameters(): CircuitParameters {
     supplyVoltage: 3.3,
     removedParts: [],
     withoutBreadboard: false,
+    buildStyle: 'breadboard',
 
     gpioOutputHigh: true,
     ledColor: 'red',

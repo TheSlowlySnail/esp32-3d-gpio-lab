@@ -321,3 +321,260 @@ export class WagoClampMesh {
     return this.portLocals[safeIdx].clone().applyMatrix4(this.group.matrixWorld);
   }
 }
+
+/**
+ * Authentische grüne FR-4 Lochrasterplatine (Perfboard) für den Aufbau OHNE Breadboard:
+ * - Zeigt hunderte goldene Kupfer-Lötaugen im 2,54-mm-Raster
+ * - Rendert für jedes eingelötete Bauteil-Beinchen / Kabelende einen glänzenden 3D-Lötzinn-Kegel (Fillet)
+ * - Zeichnet sichtbare, erhabene silberne 3D-Zinn-Leiterbrücken genau dort, wo Widerstand, LED & Kabel verlötet werden!
+ * - Im Modus „Nur Gelötet“ (showBusRails = true) ersetzen zwei verzinnte Kupferschienen (+V & GND) die WAGO-Klemmen.
+ */
+export class SolderPerfboardMesh {
+  public readonly group = new THREE.Group();
+  public readonly surfaceY = 0.22;
+
+  private readonly solderMat = new THREE.MeshStandardMaterial({
+    color: 0xe8eff7,
+    metalness: 0.96,
+    roughness: 0.13,
+  });
+  private readonly goldPadMat = new THREE.MeshStandardMaterial({
+    color: 0xeab308,
+    metalness: 0.9,
+    roughness: 0.22,
+  });
+  private readonly fluxHaloMat = new THREE.MeshBasicMaterial({
+    color: 0xf59e0b,
+    transparent: true,
+    opacity: 0.42,
+    side: THREE.DoubleSide,
+  });
+  private readonly coneGeo = new THREE.CylinderGeometry(0.036, 0.105, 0.115, 16);
+  private readonly padGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.014, 16);
+  private readonly ringGeo = new THREE.RingGeometry(0.115, 0.145, 18);
+
+  constructor(showSolderBusRails: boolean) {
+    this.group.name = 'Solder_Perfboard_FR4';
+    const width = 9.2;
+    const depth = 5.5;
+    const thickness = 0.18;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1840;
+    canvas.height = 1100;
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+      // Sattes FR-4 Platinengrün mit feiner Glasfaser-Struktur
+      const grad = ctx.createLinearGradient(0, 0, 1840, 1100);
+      grad.addColorStop(0, '#0f5132');
+      grad.addColorStop(0.5, '#0c4329');
+      grad.addColorStop(1, '#093722');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1840, 1100);
+
+      // Weißer Silkscreen-Außenrahmen
+      ctx.strokeStyle = 'rgba(226, 244, 232, 0.55)';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(20, 20, 1800, 1060);
+
+      // Beschriftung oben
+      ctx.fillStyle = '#d1fae5';
+      ctx.font = 'bold 26px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(
+        showSolderBusRails
+          ? 'FR-4 LOCHRASTER-PLATINE • KOMPLETT GELÖTET (OHNE WAGO)'
+          : 'FR-4 LOCHRASTER-PLATINE • WAGO + LÖTVERBINDUNGEN',
+        72,
+        62,
+      );
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fde047';
+      ctx.fillText('2,54 mm RASTER • 350 °C BLEIFREI', 1768, 62);
+
+      // Farbige Bus-Markierungen oben & unten wenn ohne WAGO direkt auf Platine verlötet wird
+      if (showSolderBusRails) {
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(90, 146);
+        ctx.lineTo(1750, 146);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.moveTo(90, 82);
+        ctx.lineTo(1750, 82);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fca5a5';
+        ctx.font = 'bold 26px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('+V LÖTSCHIENE', 96, 178);
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillText('GND LÖTSCHIENE', 96, 114);
+      }
+
+      // Hunderte goldene Kupfer-Lötaugen im exakten 30x10-Raster!
+      const toX = (lx: number) => ((lx + width / 2) / width) * 1840;
+      const toY = (lz: number) => ((lz + depth / 2) / depth) * 1100;
+      const rowZs = [-2.35, -2.03, -1.46, -1.16, -0.86, -0.56, -0.26, 0.26, 0.56, 0.86, 1.16, 1.46, 2.03, 2.35];
+
+      for (let col = 1; col <= 30; col++) {
+        const lx = (col - 15.5) * 0.28;
+        const cx = toX(lx);
+        for (const lz of rowZs) {
+          const cy = toY(lz);
+          // Goldener Kupfer-Ring
+          ctx.fillStyle = '#d4a62a';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+          ctx.fill();
+          // Dunkles Bohrloch in der Mitte
+          ctx.fillStyle = '#071a11';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Spaltennummern 1, 5, 10, 15, 20, 25, 30
+        if (col === 1 || col % 5 === 0) {
+          ctx.fillStyle = 'rgba(209, 250, 229, 0.72)';
+          ctx.font = 'bold 20px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(String(col), cx, toY(0) + 6);
+        }
+      }
+
+      // 4 goldene Eck-Befestigungslöcher
+      for (const [ex, ey] of [
+        [52, 52],
+        [1788, 52],
+        [52, 1048],
+        [1788, 1048],
+      ] as const) {
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#06150e';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 11, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const topTex = new THREE.CanvasTexture(canvas);
+    topTex.colorSpace = THREE.SRGBColorSpace;
+    topTex.anisotropy = 8;
+
+    const sideMat = new THREE.MeshStandardMaterial({
+      color: 0x0b3b24,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+    const topMat = new THREE.MeshStandardMaterial({
+      map: topTex,
+      roughness: 0.36,
+      metalness: 0.22,
+    });
+
+    const board = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, depth), [
+      sideMat,
+      sideMat,
+      topMat,
+      sideMat,
+      sideMat,
+      sideMat,
+    ]);
+    board.position.y = this.surfaceY - thickness / 2;
+    board.castShadow = true;
+    board.receiveShadow = true;
+    this.group.add(board);
+
+    // 4 kleine Messing-Abstandshalter unter den Ecken
+    const footMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.88, roughness: 0.22 });
+    for (const fx of [-width / 2 + 0.35, width / 2 - 0.35]) {
+      for (const fz of [-depth / 2 + 0.35, depth / 2 - 0.35]) {
+        const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 12), footMat);
+        foot.position.set(fx, 0.04, fz);
+        this.group.add(foot);
+      }
+    }
+
+    // Im Modus "Nur Gelötet" (ohne WAGO): zwei durchgehende, glänzend verzinnte 3D-Sammelschienen!
+    if (showSolderBusRails) {
+      const railGeo = new THREE.CylinderGeometry(0.052, 0.068, width - 0.85, 14);
+      railGeo.rotateZ(Math.PI / 2);
+
+      const posRail = new THREE.Mesh(railGeo, this.solderMat);
+      posRail.position.set(0, this.surfaceY + 0.032, -2.03);
+      posRail.castShadow = true;
+      this.group.add(posRail);
+
+      const gndRail = new THREE.Mesh(railGeo, this.solderMat);
+      gndRail.position.set(0, this.surfaceY + 0.032, -2.35);
+      gndRail.castShadow = true;
+      this.group.add(gndRail);
+    }
+  }
+
+  /**
+   * Erzeugt glänzende 3D-Lötzinn-Kegel an jedem Bauteil-/Kabel-Pin sowie eine sichtbare
+   * erhabene silberne 3D-Lötbrücke zwischen allen zusammengehörenden Punkten einer Spalte!
+   */
+  public addSolderNodeGroup(worldPoints: THREE.Vector3[], hoverTag?: (obj: THREE.Object3D) => void): void {
+    if (worldPoints.length === 0) return;
+    this.group.updateMatrixWorld(true);
+    const inv = this.group.matrixWorld.clone().invert();
+    const localPts = worldPoints.map((wp) => wp.clone().applyMatrix4(inv));
+
+    const nodeGroup = new THREE.Group();
+
+    // 1. An jedem einzelnen Pin: Goldpad + glänzender Lötzinn-Kegel + dezenter amber Highlight-Ring
+    for (const lp of localPts) {
+      const pad = new THREE.Mesh(this.padGeo, this.goldPadMat);
+      pad.position.set(lp.x, this.surfaceY + 0.008, lp.z);
+      nodeGroup.add(pad);
+
+      const cone = new THREE.Mesh(this.coneGeo, this.solderMat);
+      cone.position.set(lp.x, this.surfaceY + 0.06, lp.z);
+      cone.castShadow = true;
+      nodeGroup.add(cone);
+
+      const halo = new THREE.Mesh(this.ringGeo, this.fluxHaloMat);
+      halo.rotation.x = -Math.PI / 2;
+      halo.position.set(lp.x, this.surfaceY + 0.016, lp.z);
+      nodeGroup.add(halo);
+    }
+
+    // 2. Wenn >= 2 Punkte in dieser Spalte verbunden sind (z.B. Kabel <-> Widerstand <-> LED):
+    //    dicke glänzende 3D-Zinn-Leiterbahn (Lötbrücke) quer über alle beteiligten Lötaugen!
+    if (localPts.length >= 2) {
+      let minZ = Infinity;
+      let maxZ = -Infinity;
+      let avgX = 0;
+      for (const lp of localPts) {
+        if (lp.z < minZ) minZ = lp.z;
+        if (lp.z > maxZ) maxZ = lp.z;
+        avgX += lp.x;
+      }
+      avgX /= localPts.length;
+      const spanZ = maxZ - minZ;
+      if (spanZ > 0.04) {
+        const bridgeGeo = new THREE.CylinderGeometry(0.056, 0.072, spanZ, 12);
+        bridgeGeo.rotateX(Math.PI / 2);
+        const bridge = new THREE.Mesh(bridgeGeo, this.solderMat);
+        bridge.position.set(avgX, this.surfaceY + 0.036, (minZ + maxZ) / 2);
+        bridge.castShadow = true;
+        nodeGroup.add(bridge);
+      }
+    }
+
+    if (hoverTag) {
+      hoverTag(nodeGroup);
+    }
+    this.group.add(nodeGroup);
+  }
+}

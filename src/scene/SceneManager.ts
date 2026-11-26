@@ -46,7 +46,7 @@ import {
   UltrasonicMesh,
 } from './components/SpecialtyModules';
 import { LevelShifterMesh, WledStripMesh } from './components/WledStripMesh';
-import { MeanWellPowerMesh, WagoClampMesh } from './components/PowerAndWiringMeshes';
+import { MeanWellPowerMesh, SolderPerfboardMesh, WagoClampMesh } from './components/PowerAndWiringMeshes';
 import { CoolingFanMesh, OledDisplayMesh } from './components/PiPeripheralsMesh';
 import { createSandboxExtraMesh, type AnimatedSandboxExtra } from './components/SandboxExtraMeshes';
 
@@ -228,6 +228,7 @@ export class SceneManager {
 
   private targetServoDeg = 90;
   private currentLayoutKey = '';
+  private activeSolderSurfaceY: number | null = null;
 
   // Raycasting & click-vs-drag detection
   private readonly raycaster = new THREE.Raycaster();
@@ -626,7 +627,7 @@ export class SceneManager {
     const layoutKey = [
       params.boardId,
       params.topology,
-      params.withoutBreadboard ? 'nobread' : 'bread',
+      params.buildStyle ?? (params.withoutBreadboard ? 'wago-solder' : 'breadboard'),
       params.pullMode,
       params.dividerMode,
       params.i2cPullupEnabled,
@@ -810,7 +811,19 @@ export class SceneManager {
     lateralOffset = 0,
     hoverInfo?: HoverPartInfo,
   ): THREE.Group {
-    const wire = new JumperWireMesh({ start, end, color, arcHeight, lateralOffset });
+    const solderStart =
+      this.activeSolderSurfaceY !== null && Math.abs(start.y - this.activeSolderSurfaceY) < 0.08;
+    const solderEnd =
+      this.activeSolderSurfaceY !== null && Math.abs(end.y - this.activeSolderSurfaceY) < 0.08;
+    const wire = new JumperWireMesh({
+      start,
+      end,
+      color,
+      arcHeight,
+      lateralOffset,
+      solderStart,
+      solderEnd,
+    });
     if (hoverInfo) {
       tagHoverable(wire.group, hoverInfo);
       applyRemovedGhostEffect(wire.group, hoverInfo.isRemoved);
@@ -834,59 +847,111 @@ export class SceneManager {
   private rebuildCircuitLayout(params: CircuitParameters): void {
     this.clearDynamicCircuit();
 
-    const noBreadboard = params.withoutBreadboard;
-    this.breadboard.group.visible = !noBreadboard;
+    const buildStyle = params.buildStyle ?? (params.withoutBreadboard ? 'wago-solder' : 'breadboard');
+    const isSoldered = buildStyle !== 'breadboard';
+    const useWago = buildStyle === 'wago-solder';
+    this.breadboard.group.visible = !isSoldered;
 
+    let perfboard: SolderPerfboardMesh | null = null;
     let wagoPos: WagoClampMesh | null = null;
     let wagoGnd: WagoClampMesh | null = null;
     let wagoPosPort = 0;
     let wagoGndPort = 0;
 
-    if (noBreadboard) {
-      // Mount two authentic WAGO 221-415 lever clamps on the ESD mat for direct breadboard-free wiring!
-      wagoPos = new WagoClampMesh(0xef4444, 5);
-      wagoPos.group.position.set(0.4, 0.05, -2.25);
-      this.registerPart(wagoPos.group, {
-        partId: 'wago-pos',
-        name: 'WAGO 221-415 Verteilerklemme (+V)',
-        categoryLabel: 'Direktverdrahtung',
-        description: 'Werkzeuglose Hebelklemme für den fertigen Aufbau ohne Steckbrett: verteilt +3,3 V / +5 V sicher auf alle Verbraucher (bis 32 A).',
-        specLine: 'Ohne Breadboard · 5-fach Hebelklemme',
+    // Sammelt alle eingesteckten Beinchen & Kabelenden pro Spalte für echte 3D-Lötstellen & Zinn-Brücken!
+    const solderNodesByGroup = new Map<string, { colLabel: string; points: THREE.Vector3[] }>();
+
+    if (isSoldered) {
+      perfboard = new SolderPerfboardMesh(!useWago);
+      perfboard.group.position.set(2.0, 0, 0);
+      this.activeSolderSurfaceY = perfboard.surfaceY;
+      this.registerPart(perfboard.group, {
+        partId: 'solder-perfboard',
+        name: useWago
+          ? 'FR-4 Lochrasterplatine (WAGO + Gelötet)'
+          : 'FR-4 Lochrasterplatine (Komplett gelötet)',
+        categoryLabel: 'Löt-Aufbau',
+        badgeLabel: useWago ? 'WAGO + LÖT' : '100% GELÖTET',
+        description: useWago
+          ? 'Fertiger Aufbau ohne Steckbrett: +V und GND werden über WAGO 221-415 Hebelklemmen verteilt, während Widerstände, LEDs und Signalleitungen mit silbernen Zinn-Kegeln & Lötbrücken fest verlötet sind.'
+          : 'Komplett gelöteter Aufbau ohne WAGO-Klemmen: Alle Bauteile sitzen auf der FR-4 Lochrasterplatine; +V und GND laufen über verzinnte 3D-Sammelschienen, und alle Beinchen sind mit glänzenden Lötzinn-Kegeln & Lötbrücken verbunden!',
+        specLine: '2,54 mm Lochraster · 350 °C bleifreies Lot · Hover über Zinn-Stellen für Details',
         removable: false,
         isRemoved: false,
       });
 
-      wagoGnd = new WagoClampMesh(0x1e293b, 5);
-      wagoGnd.group.position.set(3.4, 0.05, -2.25);
-      this.registerPart(wagoGnd.group, {
-        partId: 'wago-gnd',
-        name: 'WAGO 221-415 Masseklemme (GND)',
-        categoryLabel: 'Direktverdrahtung',
-        description: 'Verbindet alle Masseleitungen (ESP, Netzteil/Akku, Sensoren und LED-Streifen) sternförmig ohne Steckbrett.',
-        specLine: 'Ohne Breadboard · Gemeinsame Masse (0 V)',
-        removable: false,
-        isRemoved: false,
-      });
+      if (useWago) {
+        // Authentische WAGO 221-415 Hebelklemmen sauber auf der oberen Bus-Kante der Platine
+        wagoPos = new WagoClampMesh(0xef4444, 5);
+        wagoPos.group.position.set(0.4, perfboard.surfaceY, -2.25);
+        this.registerPart(wagoPos.group, {
+          partId: 'wago-pos',
+          name: 'WAGO 221-415 Verteilerklemme (+V)',
+          categoryLabel: 'Hebelklemme',
+          badgeLabel: '+V WAGO',
+          description:
+            'Werkzeuglose 5-fach-Hebelklemme: verteilt +3,3 V / +5 V sicher auf alle Verbraucher (bis 32 A) — ideal, wenn du Stromleitungen steckbar halten willst.',
+          specLine: 'Ohne Breadboard · WAGO 221-415 (+V)',
+          removable: false,
+          isRemoved: false,
+        });
 
-      // Subtle soldered Perfboard/wire-splice rail markers under direct-mounted parts
-      const spliceBar = new THREE.Mesh(
-        new THREE.BoxGeometry(7.8, 0.04, 2.8),
-        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.75, transparent: true, opacity: 0.32 }),
-      );
-      spliceBar.position.set(2.0, 0.06, 0.2);
-      this.dynamicCircuitGroup.add(spliceBar);
+        wagoGnd = new WagoClampMesh(0x1e293b, 5);
+        wagoGnd.group.position.set(3.4, perfboard.surfaceY, -2.25);
+        this.registerPart(wagoGnd.group, {
+          partId: 'wago-gnd',
+          name: 'WAGO 221-415 Masseklemme (GND)',
+          categoryLabel: 'Hebelklemme',
+          badgeLabel: 'GND WAGO',
+          description:
+            'Verbindet alle Masseleitungen (ESP, Netzteil/Akku, Sensoren und LEDs) sternförmig und wieder lösbar ohne Steckbrett.',
+          specLine: 'Ohne Breadboard · WAGO 221-415 (GND)',
+          removable: false,
+          isRemoved: false,
+        });
+      }
+    } else {
+      this.activeSolderSurfaceY = null;
     }
 
+    const recordSolderPoint = (groupKey: string, colLabel: string, worldPt: THREE.Vector3) => {
+      let bucket = solderNodesByGroup.get(groupKey);
+      if (!bucket) {
+        bucket = { colLabel, points: [] };
+        solderNodesByGroup.set(groupKey, bucket);
+      }
+      // Keine exakten Duplikate direkt übereinander legen
+      const exists = bucket.points.some((p) => p.distanceToSquared(worldPt) < 0.002);
+      if (!exists) {
+        bucket.points.push(worldPt.clone());
+      }
+    };
+
     const hole = (col: number, row: string): THREE.Vector3 => {
-      if (noBreadboard && wagoPos && wagoGnd) {
-        if (row === '+top' || row === '+bot') {
-          return wagoPos.getPortWorld((wagoPosPort++) % 5);
+      if (isSoldered && perfboard) {
+        if (useWago && wagoPos && wagoGnd) {
+          if (row === '+top' || row === '+bot') {
+            return wagoPos.getPortWorld((wagoPosPort++) % 5);
+          }
+          if (row === '-top' || row === '-bot') {
+            return wagoGnd.getPortWorld((wagoGndPort++) % 5);
+          }
         }
-        if (row === '-top' || row === '-bot') {
-          return wagoGnd.getPortWorld((wagoGndPort++) % 5);
-        }
+
         const p = this.breadboard.getWorldHolePosition(col, row);
-        p.y = 0.1; // sit directly on desk/splice mat when breadboard is hidden
+        p.y = perfboard.surfaceY;
+
+        if (row === '+top' || row === '+bot' || row === '-top' || row === '-bot') {
+          // Einzelne Zinn-Lötstelle direkt auf der verzinnten Sammelschiene (im Nur-Gelötet-Modus)
+          recordSolderPoint(
+            `rail:${row}:${col}`,
+            row.includes('+') ? `+V Lötschiene (Spalte ${col})` : `GND Lötschiene (Spalte ${col})`,
+            p,
+          );
+        } else {
+          const half = ['a', 'b', 'c', 'd', 'e'].includes(row) ? 'unten' : 'oben';
+          recordSolderPoint(`col:${col}:${half}`, `Spalte ${col} (${half === 'oben' ? 'f–j' : 'a–e'})`, p);
+        }
         return p;
       }
       return this.breadboard.getWorldHolePosition(col, row);
@@ -1490,10 +1555,10 @@ export class SceneManager {
         this.addWire(this.activeMeanWell.getVPosWorld(), hole(2, '+top'), 0xef4444, 2.35, -0.8);
         this.addWire(this.activeMeanWell.getGndWorld(), hole(2, '-top'), 0x1e293b, 2.65, -1.1);
 
-        // 1000 uF Stützkondensator an den Power-Rails auf dem Breadboard / neben WAGO
+        // 1000 uF Stützkondensator an den Power-Rails / Lötschienen bzw. neben WAGO
         const bufCap = new CapacitorMesh(
-          noBreadboard ? hole(6, 'h') : hole(5, '+top'),
-          noBreadboard ? hole(6, 'j') : hole(5, '-top'),
+          useWago ? hole(6, 'h') : hole(5, '+top'),
+          useWago ? hole(6, 'j') : hole(5, '-top'),
         );
         this.registerPart(bufCap.group, {
           partId: 'buffer-cap',
@@ -1504,7 +1569,7 @@ export class SceneManager {
           removable: true,
           isRemoved: isRem('buffer-cap'),
         });
-        if (noBreadboard) {
+        if (useWago) {
           this.addWire(hole(6, 'h'), hole(6, '+top'), 0xef4444, 0.85, 0);
           this.addWire(hole(6, 'j'), hole(6, '-top'), 0x1e293b, 0.85, 0);
         }
@@ -1854,6 +1919,53 @@ export class SceneManager {
         break;
       }
     }
+
+    // Alle gesammelten Lötstellen (Zinn-Kegel + silberne Zinn-Lötbrücken zwischen Widerstand, LED & Kabeln!) rendern
+    if (isSoldered && perfboard) {
+      let jointIdx = 0;
+      for (const [, bucket] of solderNodesByGroup) {
+        jointIdx++;
+        const count = bucket.points.length;
+        const isBridge = count >= 2;
+        const jointInfo: HoverPartInfo = {
+          partId: `solder-joint-${jointIdx}`,
+          name: isBridge
+            ? `🔥 Lötstelle & Zinn-Brücke (${bucket.colLabel})`
+            : `🔥 Lötstelle (${bucket.colLabel})`,
+          categoryLabel: 'Lötverbindung',
+          badgeLabel: isBridge ? `${count}× VERLÖTET` : 'LÖTPUNKT',
+          description: isBridge
+            ? `Hier werden ${count} Beinchen/Kabelenden direkt auf der Lochrasterplatine mit einer silbernen Zinn-Brücke dauerhaft verbunden (z. B. Kabel ↔ Widerstand ↔ LED).`
+            : 'Einzelnes eingelötetes Bauteil-Beinchen bzw. verzinntes Kabelende direkt auf dem goldenen Kupfer-Lötauge.',
+          specLine: '350 °C bleifreies Lot · 2–3 s Pad & Beinchen gemeinsam heizen',
+          removable: false,
+          isRemoved: false,
+          pinDetails: [
+            {
+              pin: 'Löt-Technik',
+              role: '350 °C (2–3 s)',
+              property: 'Lötkolben an Pad + Beinchen halten, Zinn ans Pad führen → glänzender Kegel!',
+              kind: 'warning',
+            },
+            {
+              pin: isBridge ? 'Zinn-Brücke' : 'Kupfer-Pad',
+              role: isBridge ? `${count} Kontakte` : '1 Kontakt',
+              property: isBridge
+                ? 'Ersetzt die interne Breadboard-Klammer durch eine feste Kupfer-/Zinn-Leiterbahn!'
+                : 'Hält den Pin mechanisch & elektrisch sicher auf der FR-4-Platine.',
+              kind: 'signal',
+            },
+          ],
+        };
+        perfboard.addSolderNodeGroup(bucket.points, (obj) => {
+          obj.traverse((ch) => {
+            ch.userData.keepOwnHoverInfo = true;
+            ch.userData.hoverInfo = jointInfo;
+          });
+        });
+      }
+    }
+    this.activeSolderSurfaceY = null;
   }
 
   public setSandboxTool(tool: SandboxToolId): void {

@@ -192,6 +192,7 @@ class LearnEsp32App {
   private modeSubbarHintEl!: HTMLElement;
   private schematicModalEl!: HTMLElement;
   private boardsModalEl!: HTMLElement;
+  private shortcutsModalEl!: HTMLElement;
   private hoverTooltipEl!: HTMLElement;
   private sceneSectionEl!: HTMLElement;
 
@@ -361,12 +362,22 @@ class LearnEsp32App {
           <button
             type="button"
             data-action="reset-camera"
-            title="Kamera auf aktuelle Schaltung zentrieren"
+            title="Kamera auf aktuelle Schaltung zentrieren (Taste R)"
             class="eng-btn-neutral px-2 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5"
           >
             <svg class="w-3.5 h-3.5 eng-text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
             </svg>
+          </button>
+
+          <button
+            type="button"
+            data-action="open-shortcuts"
+            title="Tastenkürzel &amp; 3D-Steuerung anzeigen (Taste ? oder H)"
+            class="eng-btn-neutral px-2.5 py-1.5 rounded-lg border text-xs transition cursor-pointer flex items-center gap-1.5 font-medium whitespace-nowrap"
+          >
+            <span>⌨️</span>
+            <span class="hidden md:inline">Shortcuts</span>
           </button>
 
           <button
@@ -544,6 +555,125 @@ class LearnEsp32App {
         </div>
       </div>
 
+      <!-- Modal: Tastenkürzel & 3D-Steuerung -->
+      <div data-modal="shortcuts" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm items-center justify-center p-4">
+        <div class="eng-card w-full max-w-3xl rounded-xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+          <div class="eng-header flex items-center justify-between px-5 py-3.5 border-b gap-3">
+            <div>
+              <h3 class="text-sm font-bold eng-text-main flex items-center gap-2">
+                <span>⌨️</span>
+                <span>Tastenkürzel &amp; 3D-Steuerung</span>
+              </h3>
+              <p class="text-xs eng-text-muted">Raum drehen, verschieben, zoomen &amp; Werkzeuge blitzschnell per Tastatur bedienen</p>
+            </div>
+            <button type="button" data-action="close-shortcuts" class="eng-btn-neutral px-3 py-1.5 rounded-lg border text-xs cursor-pointer">
+              Schließen (Esc)
+            </button>
+          </div>
+          <div class="p-5 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="eng-card-soft rounded-xl border p-3.5 flex flex-col gap-2.5">
+              <h4 class="text-[11px] font-bold uppercase tracking-wider eng-text-accent">🎥 3D-Raum &amp; Kamera</h4>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Raum drehen (Orbit)</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Linksklick + Ziehen</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body font-semibold eng-text-main">Raum verschieben (Pan)</span>
+                  <kbd class="px-2 py-0.5 rounded border border-cyan-500/50 bg-cyan-500/15 font-mono text-[10.5px] eng-text-accent">Shift + Linksklick</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Alternative zum Verschieben</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Rechts- / Mittelklick</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Rein- &amp; Rauszoomen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Mausrad</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Raum über Werkbank schieben</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">W A S D / Pfeiltasten</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Kamera zentrieren (Reset)</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">R</kbd>
+                </div>
+              </div>
+            </div>
+
+            <div class="eng-card-soft rounded-xl border p-3.5 flex flex-col gap-2.5">
+              <h4 class="text-[11px] font-bold uppercase tracking-wider text-amber-400">🔧 Freie Werkbank</h4>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Werkzeug: + Bauteil setzen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">1</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Werkzeug: ✋ Bauteil verschieben</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">2</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Werkzeug: 〰 Jumperkabel ziehen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">3</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Werkzeug: 🗑 Bauteil/Kabel löschen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">4</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Kabelziehen / Verschieben abbrechen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Esc</kbd>
+                </div>
+              </div>
+            </div>
+
+            <div class="eng-card-soft rounded-xl border p-3.5 flex flex-col gap-2.5">
+              <h4 class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">⚡ Simulation &amp; Schaltung</h4>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Taster / LED / Relais (oder Lötzinn)</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Leertaste</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Raum abdunkeln / erhellen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">L</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Mit / Ohne Breadboard (WAGO)</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">B</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Fritzing-Schaltplan öffnen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">P</kbd>
+                </div>
+              </div>
+            </div>
+
+            <div class="eng-card-soft rounded-xl border p-3.5 flex flex-col gap-2.5">
+              <h4 class="text-[11px] font-bold uppercase tracking-wider text-fuchsia-400">🧭 Navigation &amp; Ansicht</h4>
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Diese Shortcut-Liste öffnen / schließen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">? oder H</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Hell- / Dunkelmodus wechseln</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">T</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Vorherige / nächste Lektion</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Alt + ← / →</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Pin-Eigenschaften anzeigen</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Maus-Hover</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Rubrik: Alle Mikrocomputer & Mikrocontroller im Überblick -->
       <div data-modal="boards" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm items-center justify-center p-4">
         <div class="eng-card w-full max-w-5xl rounded-xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
@@ -579,6 +709,7 @@ class LearnEsp32App {
     this.modeSubbarHintEl = this.root.querySelector('[data-mode-hint]')!;
     this.schematicModalEl = this.root.querySelector('[data-modal="schematic"]')!;
     this.boardsModalEl = this.root.querySelector('[data-modal="boards"]')!;
+    this.shortcutsModalEl = this.root.querySelector('[data-modal="shortcuts"]')!;
     this.hoverTooltipEl = this.root.querySelector('[data-tooltip="hover"]')!;
     this.sceneSectionEl = this.root.querySelector('[data-section="scene"]')!;
   }
@@ -1144,14 +1275,38 @@ class LearnEsp32App {
       URL.revokeObjectURL(url);
     });
 
-    this.root.querySelector('[data-action="reset-camera"]')?.addEventListener('click', () => {
+    const openShortcutsModal = () => {
+      this.shortcutsModalEl.classList.remove('hidden');
+      this.shortcutsModalEl.classList.add('flex');
+    };
+    const closeShortcutsModal = () => {
+      this.shortcutsModalEl.classList.add('hidden');
+      this.shortcutsModalEl.classList.remove('flex');
+    };
+    const toggleShortcutsModal = () => {
+      if (this.shortcutsModalEl.classList.contains('hidden')) {
+        openShortcutsModal();
+      } else {
+        closeShortcutsModal();
+      }
+    };
+
+    this.root.querySelector('[data-action="open-shortcuts"]')?.addEventListener('click', openShortcutsModal);
+    this.root.querySelector('[data-action="close-shortcuts"]')?.addEventListener('click', closeShortcutsModal);
+    this.shortcutsModalEl.addEventListener('click', (e) => {
+      if (e.target === this.shortcutsModalEl) closeShortcutsModal();
+    });
+
+    const resetCameraView = () => {
       if (this.appMode === 'lessons') {
         const lesson = getLessonById(this.activeLessonId);
         this.sceneManager.focusCamera(lesson.cameraPreset.position, lesson.cameraPreset.target);
       } else {
         this.sceneManager.focusCamera([1.4, 11.4, 10.6], [1.1, 0.35, 0.35]);
       }
-    });
+    };
+
+    this.root.querySelector('[data-action="reset-camera"]')?.addEventListener('click', resetCameraView);
 
     const modal = this.root.querySelector('[data-modal="registry"]') as HTMLElement;
     this.root.querySelector('[data-action="toggle-registry"]')?.addEventListener('click', () => {
@@ -1169,16 +1324,149 @@ class LearnEsp32App {
       }
     });
 
+    const closeAllModals = (): boolean => {
+      let closedAny = false;
+      for (const m of [this.shortcutsModalEl, this.boardsModalEl, this.schematicModalEl, modal]) {
+        if (m && !m.classList.contains('hidden')) {
+          m.classList.add('hidden');
+          m.classList.remove('flex');
+          closedAny = true;
+        }
+      }
+      return closedAny;
+    };
+
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && (this.wireStart || this.selectedMovePartId)) {
-        this.wireStart = null;
-        this.selectedMovePartId = null;
-        this.stepSimulation(true);
+      if (e.code === 'Escape') {
+        if (closeAllModals()) return;
+        if (this.wireStart || this.selectedMovePartId) {
+          this.wireStart = null;
+          this.selectedMovePartId = null;
+          this.stepSimulation(true);
+        }
         return;
       }
-      if (e.code !== 'Space' || e.repeat) return;
+
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Shortcut-Liste per ? oder H öffnen/schließen
+      if ((e.key === '?' || e.key === 'h' || e.key === 'H') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (!e.repeat) {
+          e.preventDefault();
+          toggleShortcutsModal();
+        }
+        return;
+      }
+
+      // Solange ein Modal offen ist, keine 3D-Shortcuts auslösen
+      const anyModalOpen =
+        !this.shortcutsModalEl.classList.contains('hidden') ||
+        !this.boardsModalEl.classList.contains('hidden') ||
+        !this.schematicModalEl.classList.contains('hidden') ||
+        !modal.classList.contains('hidden');
+      if (anyModalOpen) return;
+
+      // Alt + Pfeil links/rechts -> Lektion wechseln
+      if (e.altKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && this.appMode === 'lessons') {
+        e.preventDefault();
+        const idx = LESSONS.findIndex((l) => l.id === this.activeLessonId);
+        const delta = e.code === 'ArrowRight' ? 1 : -1;
+        const next = LESSONS[(idx + delta + LESSONS.length) % LESSONS.length];
+        this.selectLesson(next.id, false);
+        return;
+      }
+
+      const is3DVisible =
+        this.appMode === 'lessons' || this.appMode === 'sandbox' || this.appMode === 'guided';
+
+      // 3D-Raum sanft mit WASD oder Pfeiltasten verschieben (Pan)
+      if (is3DVisible && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const panStep = e.shiftKey ? 1.1 : 0.55;
+        if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+          e.preventDefault();
+          this.sceneManager.panCameraBy(0, panStep);
+          return;
+        }
+        if (e.code === 'KeyS' || e.code === 'ArrowDown') {
+          e.preventDefault();
+          this.sceneManager.panCameraBy(0, -panStep);
+          return;
+        }
+        if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
+          e.preventDefault();
+          this.sceneManager.panCameraBy(-panStep, 0);
+          return;
+        }
+        if (e.code === 'KeyD' || e.code === 'ArrowRight') {
+          e.preventDefault();
+          this.sceneManager.panCameraBy(panStep, 0);
+          return;
+        }
+      }
+
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Kamera zentrieren (R)
+      if (e.code === 'KeyR' && is3DVisible) {
+        e.preventDefault();
+        resetCameraView();
+        return;
+      }
+
+      // Raum abdunkeln / erhellen (L)
+      if (e.code === 'KeyL' && is3DVisible) {
+        e.preventDefault();
+        this.roomDimmed = !this.roomDimmed;
+        this.sceneManager.setRoomDimmed(this.roomDimmed);
+        this.updateRoomDimToggleUi(this.roomDimmed);
+        return;
+      }
+
+      // Hell- / Dunkelmodus (T)
+      if (e.code === 'KeyT') {
+        e.preventDefault();
+        this.applyTheme(this.theme === 'dark' ? 'light' : 'dark');
+        return;
+      }
+
+      // Mit / Ohne Breadboard (B) in Lektionen
+      if (e.code === 'KeyB' && this.appMode === 'lessons') {
+        e.preventDefault();
+        const next = !this.params.withoutBreadboard;
+        this.updateBreadboardToggleUi(next);
+        this.updateParams({ withoutBreadboard: next });
+        return;
+      }
+
+      // Fritzing-Schaltplan öffnen (P)
+      if (e.code === 'KeyP' && is3DVisible) {
+        e.preventDefault();
+        this.openSchematicModal();
+        return;
+      }
+
+      // Werkbank-Werkzeuge (1 = Teil setzen, 2 = Verschieben, 3 = Kabel, 4 = Löschen)
+      if (this.appMode === 'sandbox') {
+        const toolByKey: Record<string, SandboxToolId> = {
+          Digit1: 'place',
+          Digit2: 'move',
+          Digit3: 'wire',
+          Digit4: 'delete',
+        };
+        const chosenTool = toolByKey[e.code];
+        if (chosenTool) {
+          e.preventDefault();
+          this.sandboxTool = chosenTool;
+          this.wireStart = null;
+          if (chosenTool !== 'move') this.selectedMovePartId = null;
+          this.sceneManager.setSandboxTool(chosenTool);
+          this.stepSimulation(true);
+          return;
+        }
+      }
+
+      if (e.code !== 'Space') return;
 
       if (this.appMode === 'sandbox' || this.appMode === 'guided') {
         e.preventDefault();
@@ -1341,9 +1629,9 @@ class LearnEsp32App {
       this.modeSubbarHintEl.textContent =
         `${LESSONS.length} fertige Schaltungen mit Live-Physik, Oszilloskop & Code-Generator`;
       this.modeLegendEl.innerHTML = `
-        <span>Hover: Bauteil-Info</span>
+        <span>Shift+Ziehen / Rechtsklick: Verschieben</span>
         <span class="opacity-40">•</span>
-        <span>Klick auf Bauteil: Entfernen/Einsetzen</span>
+        <span>? Shortcuts</span>
         <span class="opacity-40">•</span>
         <span data-hint="interactive" class="eng-text-accent">${getLessonById(this.activeLessonId).getPrimaryPin(this.params.boardId)} · Live</span>
       `;
@@ -1351,9 +1639,11 @@ class LearnEsp32App {
       this.modeSubbarHintEl.textContent =
         `${SANDBOX_CATALOG.length} Sensoren & Aktoren · Platzieren, ✋ Verschieben, 〰 Verkabeln & 🗑 Löschen direkt in 3D!`;
       this.modeLegendEl.innerHTML = `
-        <span>Setzen / ✋ Verschieben: Klick aufs Steckbrett</span>
+        <span>Shift+Ziehen: Raum verschieben</span>
         <span class="opacity-40">•</span>
-        <span>〰 Kabel: 2 Punkte (ESC = Abbruch)</span>
+        <span>1–4: Werkzeuge</span>
+        <span class="opacity-40">•</span>
+        <span>? Shortcuts</span>
         <span class="opacity-40">•</span>
         <span class="eng-text-accent">Freie Werkbank (${SANDBOX_CATALOG.length} Teile)</span>
       `;
@@ -1361,9 +1651,9 @@ class LearnEsp32App {
       this.modeSubbarHintEl.textContent =
         `${GUIDED_PROJECTS.length} geführte Projekte — folge den pulsierenden 3D-Markierungen oder klicke „Diesen Schritt für mich stecken“!`;
       this.modeLegendEl.innerHTML = `
-        <span>Pulsierende Ringe: Hier klicken!</span>
+        <span>Shift+Ziehen: Raum verschieben</span>
         <span class="opacity-40">•</span>
-        <span>Automatische Schritt-Prüfung</span>
+        <span>? Shortcuts</span>
         <span class="opacity-40">•</span>
         <span class="text-emerald-500">🧭 Bau mit mir! (${GUIDED_PROJECTS.length} Projekte)</span>
       `;

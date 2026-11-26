@@ -284,8 +284,16 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.07;
-    this.controls.minDistance = 5.5;
-    this.controls.maxDistance = 34;
+    this.controls.enablePan = true;
+    this.controls.screenSpacePanning = false;
+    this.controls.panSpeed = 1.15;
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+    this.controls.minDistance = 3.2;
+    this.controls.maxDistance = 36;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.06;
     this.controls.target.set(0.0, 0.5, 0.15);
     this.controls.update();
@@ -293,6 +301,21 @@ export class SceneManager {
     this.controls.addEventListener('start', () => {
       this.cameraAnimTargetPos = null;
       this.cameraAnimLookAt = null;
+    });
+    this.controls.addEventListener('change', () => {
+      // Zielpunkt sauber im Bereich der Werkbank halten, damit man sich nicht verliert
+      const prevX = this.controls.target.x;
+      const prevY = this.controls.target.y;
+      const prevZ = this.controls.target.z;
+      const clampedX = Math.max(-14, Math.min(14, prevX));
+      const clampedY = Math.max(0.05, Math.min(4.5, prevY));
+      const clampedZ = Math.max(-11, Math.min(11, prevZ));
+      if (clampedX !== prevX || clampedY !== prevY || clampedZ !== prevZ) {
+        this.camera.position.x += clampedX - prevX;
+        this.camera.position.y += clampedY - prevY;
+        this.camera.position.z += clampedZ - prevZ;
+        this.controls.target.set(clampedX, clampedY, clampedZ);
+      }
     });
 
     this.setupLighting();
@@ -548,6 +571,32 @@ export class SceneManager {
   public focusCamera(position: [number, number, number], target: [number, number, number]): void {
     this.cameraAnimTargetPos = new THREE.Vector3(...position);
     this.cameraAnimLookAt = new THREE.Vector3(...target);
+  }
+
+  /**
+   * Verschiebt Kamera & Zielpunkt relativ zur Blickrichtung parallel zur Werkbank-Ebene (WASD / Pfeiltasten).
+   */
+  public panCameraBy(rightDelta: number, forwardDelta: number): void {
+    this.cameraAnimTargetPos = null;
+    this.cameraAnimLookAt = null;
+
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-6) {
+      forward.set(0, 0, -1);
+    } else {
+      forward.normalize();
+    }
+
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const move = new THREE.Vector3()
+      .addScaledVector(right, rightDelta)
+      .addScaledVector(forward, forwardDelta);
+
+    this.camera.position.add(move);
+    this.controls.target.add(move);
+    this.controls.update();
   }
 
   private swapEspBoardIfNeeded(boardId: EspBoardId): boolean {
@@ -2627,6 +2676,17 @@ export class SceneManager {
   }
 
   private readonly onPointerMove = (e: PointerEvent): void => {
+    // Bei gehaltener Shift-Taste: klares Verschiebe-Feedback (Pan-Modus) statt Bauteil-Vorschau
+    if (e.shiftKey) {
+      this.activeButton?.setHovered(false);
+      this.hoverSnapRing.visible = false;
+      this.hoverGhostGroup.visible = false;
+      this.activeHoverGhostInfo = null;
+      this.callbacks.onHoverPartChange?.(null, 0, 0);
+      this.renderer.domElement.style.cursor = e.buttons ? 'grabbing' : 'move';
+      return;
+    }
+
     const hitBtn = this.hitTestButton(e.clientX, e.clientY);
     this.activeButton?.setHovered(hitBtn);
 
@@ -2703,7 +2763,7 @@ export class SceneManager {
   };
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.shiftKey) return;
     this.pointerDownPos = { x: e.clientX, y: e.clientY };
 
     if (this.hitTestButton(e.clientX, e.clientY)) {

@@ -131,16 +131,21 @@ export class LdrMesh {
     discMesh.castShadow = true;
     this.group.add(discMesh);
 
-    // Clear epoxy coating on top
+    // Clear domed epoxy protective lens over CdS serpentine disc
     const coatMat = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
-      roughness: 0.1,
+      roughness: 0.08,
+      ior: 1.48,
+      transmission: 0.6,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.34,
       clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
     });
-    const coatMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.03, 24), coatMat);
-    coatMesh.position.set(0, 0.805, 0);
+    const coatGeo = new THREE.SphereGeometry(0.315, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    coatGeo.scale(1, 0.28, 1);
+    const coatMesh = new THREE.Mesh(coatGeo, coatMat);
+    coatMesh.position.set(0, 0.785, 0);
     this.group.add(coatMesh);
 
     // Soft warm ambient light halo above the LDR showing simulated light level

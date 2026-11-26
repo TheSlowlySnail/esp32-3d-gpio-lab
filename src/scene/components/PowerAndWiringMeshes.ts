@@ -123,18 +123,42 @@ export class MeanWellPowerMesh {
     termBlock.castShadow = true;
     this.group.add(termBlock);
 
-    // 5 metallic screw terminals (+V, -V, PE, N, L)
+    // 5 metallic screw terminals (+V, -V, PE, N, L) mit Kreuzschlitz-Kerbe & isolierenden Trennstegen
     const screwMat = new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
-      metalness: 0.9,
-      roughness: 0.2,
+      metalness: 0.92,
+      roughness: 0.18,
     });
+    const slotMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+    const dividerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 });
     for (let i = 0; i < 5; i++) {
       const z = -0.7 + i * 0.35;
-      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.08, 14), screwMat);
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 16), screwMat);
       screw.position.set(1.45, 0.58, z);
       this.group.add(screw);
+      // Kreuzschlitz
+      const s1 = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.02, 0.025), slotMat);
+      s1.position.set(1.45, 0.625, z);
+      const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.02, 0.13), slotMat);
+      s2.position.set(1.45, 0.625, z);
+      this.group.add(s1, s2);
+      if (i < 4) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.34, 0.04), dividerMat);
+        wall.position.set(1.44, 0.54, z + 0.175);
+        this.group.add(wall);
+      }
     }
+
+    // Gelber Feintrimmer (V-ADJ Potentiometer) neben der DC-OK-LED
+    const trimRing = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16),
+      new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35 }),
+    );
+    trimRing.position.set(1.18, 1.18, 0.58);
+    this.group.add(trimRing);
+    const trimSlot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.03), slotMat);
+    trimSlot.position.set(1.18, 1.225, 0.58);
+    this.group.add(trimSlot);
 
     // Green DC OK power LED
     this.powerLedMat = new THREE.MeshStandardMaterial({

@@ -168,12 +168,47 @@ export class CapacitorMesh {
     const sleeveTex = new THREE.CanvasTexture(canvas);
     sleeveTex.colorSpace = THREE.SRGBColorSpace;
 
-    const topMetal = new THREE.MeshStandardMaterial({ color: 0xd4dbe3, metalness: 0.85, roughness: 0.22 });
-    const sleeveMat = new THREE.MeshStandardMaterial({ map: sleeveTex, roughness: 0.35, metalness: 0.15 });
+    // Aluminium-Deckel mit eingepresstem K- / Kreuz-Sollbruchstellen-Relief
+    const capTopCanvas = document.createElement('canvas');
+    capTopCanvas.width = 256;
+    capTopCanvas.height = 256;
+    const tctx = capTopCanvas.getContext('2d');
+    if (tctx) {
+      const grad = tctx.createRadialGradient(128, 128, 12, 128, 128, 128);
+      grad.addColorStop(0, '#eef2f6');
+      grad.addColorStop(0.7, '#cbd5e1');
+      grad.addColorStop(1, '#94a3b8');
+      tctx.fillStyle = grad;
+      tctx.fillRect(0, 0, 256, 256);
+      tctx.strokeStyle = '#64748b';
+      tctx.lineWidth = 10;
+      tctx.beginPath();
+      tctx.moveTo(48, 48);
+      tctx.lineTo(208, 208);
+      tctx.moveTo(208, 48);
+      tctx.lineTo(48, 208);
+      tctx.stroke();
+      tctx.strokeStyle = '#0f2744';
+      tctx.lineWidth = 22;
+      tctx.beginPath();
+      tctx.arc(128, 128, 118, 0, Math.PI * 2);
+      tctx.stroke();
+    }
+    const capTopTex = new THREE.CanvasTexture(capTopCanvas);
+    capTopTex.colorSpace = THREE.SRGBColorSpace;
+
+    const topMetal = new THREE.MeshStandardMaterial({ map: capTopTex, metalness: 0.85, roughness: 0.22 });
+    const botRubber = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });
+    const sleeveMat = new THREE.MeshPhysicalMaterial({
+      map: sleeveTex,
+      roughness: 0.28,
+      metalness: 0.14,
+      clearcoat: 0.55,
+    });
 
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.36, 0.36, 0.95, 28),
-      [sleeveMat, topMetal, topMetal],
+      new THREE.CylinderGeometry(0.36, 0.36, 0.96, 32),
+      [sleeveMat, topMetal, botRubber],
     );
     body.position.y = 0.86;
     body.castShadow = true;
@@ -209,41 +244,80 @@ export class MosfetMesh {
     const center = pinPositions[1].clone();
     this.group.position.copy(center);
 
-    const leadMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.9, roughness: 0.22 });
+    const leadMat = new THREE.MeshStandardMaterial({ color: 0xdbe2ea, metalness: 0.92, roughness: 0.18 });
     pinPositions.forEach((wp) => {
       const l = wp.clone().sub(center);
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.65, 0.03), leadMat);
-      leg.position.set(l.x, 0.28, l.z);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.62, 0.032), leadMat);
+      leg.position.set(l.x, 0.26, l.z);
       this.group.add(leg);
+      // Authentische breite TO-220 Beinchen-Schulter direkt unter dem Epoxid-Gehäuse
+      const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.16, 0.042), leadMat);
+      shoulder.position.set(l.x, 0.54, l.z);
+      this.group.add(shoulder);
     });
 
-    // Black epoxy TO-220 package
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x161922, roughness: 0.45, metalness: 0.1 });
-    const pkg = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.78, 0.36), bodyMat);
-    pkg.position.set(0, 0.96, 0);
+    // Black epoxy TO-220 package mit gelaserter Beschriftung (IRLZ44N · G D S)
+    const faceCanvas = document.createElement('canvas');
+    faceCanvas.width = 256;
+    faceCanvas.height = 256;
+    const fctx = faceCanvas.getContext('2d');
+    if (fctx) {
+      fctx.fillStyle = '#141821';
+      fctx.fillRect(0, 0, 256, 256);
+      fctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      fctx.lineWidth = 6;
+      fctx.strokeRect(8, 8, 240, 240);
+      fctx.fillStyle = '#cbd5e1';
+      fctx.font = 'bold 34px JetBrains Mono, monospace';
+      fctx.textAlign = 'center';
+      fctx.fillText('IRLZ44N', 128, 92);
+      fctx.fillStyle = '#94a3b8';
+      fctx.font = '600 20px JetBrains Mono, monospace';
+      fctx.fillText('LOGIC 55V 47A', 128, 136);
+      fctx.fillStyle = '#38bdf8';
+      fctx.font = 'bold 26px JetBrains Mono, monospace';
+      fctx.fillText('G     D     S', 128, 214);
+    }
+    const faceTex = new THREE.CanvasTexture(faceCanvas);
+    faceTex.colorSpace = THREE.SRGBColorSpace;
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x161922, roughness: 0.42, metalness: 0.12 });
+    const frontMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.38, metalness: 0.14 });
+    const pkg = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.8, 0.36), [
+      bodyMat,
+      bodyMat,
+      bodyMat,
+      bodyMat,
+      frontMat,
+      bodyMat,
+    ]);
+    pkg.position.set(0, 0.98, 0);
     pkg.castShadow = true;
     this.group.add(pkg);
 
-    // Metallic heatsink tab sticking up at back
-    const tabMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.85, roughness: 0.25 });
-    const tab = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.56, 0.09), tabMat);
-    tab.position.set(0, 1.56, -0.12);
+    // Metallic heatsink tab sticking up at back + beveled top + metallic hole collar
+    const tabMat = new THREE.MeshStandardMaterial({ color: 0xd4dbe3, metalness: 0.9, roughness: 0.2 });
+    const tab = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.58, 0.095), tabMat);
+    tab.position.set(0, 1.58, -0.12);
     tab.castShadow = true;
     this.group.add(tab);
 
-    // Mounting hole illusion on tab
+    const holeRim = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.025, 10, 20), tabMat);
+    holeRim.position.set(0, 1.63, -0.07);
+    this.group.add(holeRim);
+
     const hole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.14, 0.11, 16),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 }),
+      new THREE.CylinderGeometry(0.14, 0.14, 0.115, 18),
+      new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9 }),
     );
     hole.rotation.x = Math.PI / 2;
-    hole.position.set(0, 1.62, -0.12);
+    hole.position.set(0, 1.63, -0.12);
     this.group.add(hole);
   }
 }
 
 /**
- * GY-BME280 I2C Umweltsensor-Breakout-Platine (lila PCB + Metall-Sensor).
+ * GY-BME280 I2C Umweltsensor-Breakout-Platine (lila PCB mit Silkscreen, SMDs & Bosch Metall-Sensor).
  */
 export class Bme280Mesh {
   public readonly group = new THREE.Group();
@@ -256,37 +330,97 @@ export class Bme280Mesh {
     center.divideScalar(pinPositions.length);
     this.group.position.copy(center);
 
-    const pinMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.85, roughness: 0.22 });
+    const pinMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.2 });
+    const headerMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
     pinPositions.forEach((wp) => {
       const l = wp.clone().sub(center);
       const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.48, 8), pinMat);
       pin.position.set(l.x, 0.2, l.z);
       this.group.add(pin);
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), headerMat);
+      sleeve.position.set(l.x, 0.34, l.z);
+      this.group.add(sleeve);
     });
 
-    // Iconic purple GY-BME280 breakout PCB
-    const pcb = new THREE.Mesh(
-      new THREE.BoxGeometry(1.25, 0.12, 1.05),
-      new THREE.MeshStandardMaterial({ color: 0x4c1d95, roughness: 0.45, metalness: 0.15 }),
-    );
+    // Hochauflösende lila GY-BME280 PCB-Textur mit Silkscreen, Leiterbahnen & Goldpads
+    const pcbCanvas = document.createElement('canvas');
+    pcbCanvas.width = 256;
+    pcbCanvas.height = 256;
+    const ctx = pcbCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#4c1d95';
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = 'rgba(216,180,254,0.35)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(8, 8, 240, 240);
+      // Kupfer-Leiterbahnen
+      ctx.strokeStyle = 'rgba(168,85,247,0.45)';
+      ctx.lineWidth = 5;
+      for (const x of [52, 102, 154, 204]) {
+        ctx.beginPath();
+        ctx.moveTo(x, 224);
+        ctx.lineTo(x, 140);
+        ctx.lineTo(128, 108);
+        ctx.stroke();
+        // Gold-Pad
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath();
+        ctx.arc(x, 226, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1e1b4b';
+        ctx.beginPath();
+        ctx.arc(x, 226, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 24px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('GY-BME280', 128, 42);
+      ctx.font = 'bold 16px JetBrains Mono, monospace';
+      ctx.fillText('VCC  GND  SCL  SDA', 128, 200);
+    }
+    const pcbTex = new THREE.CanvasTexture(pcbCanvas);
+    pcbTex.colorSpace = THREE.SRGBColorSpace;
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x3b0764, roughness: 0.45 });
+    const topMat = new THREE.MeshStandardMaterial({ map: pcbTex, roughness: 0.38, metalness: 0.14 });
+
+    const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.12, 1.08), [
+      sideMat,
+      sideMat,
+      topMat,
+      sideMat,
+      sideMat,
+      sideMat,
+    ]);
     pcb.position.set(0, 0.46, -0.25);
     pcb.castShadow = true;
     this.group.add(pcb);
 
-    // Metallic Bosch BME280 sensor die with tiny pressure vent hole
+    // Metallic Bosch BME280 sensor die with pressure vent hole + 4 SMD Pull-Ups & LDO
     const sensorCan = new THREE.Mesh(
       new THREE.BoxGeometry(0.32, 0.12, 0.32),
-      new THREE.MeshStandardMaterial({ color: 0xdbe2ea, metalness: 0.9, roughness: 0.2 }),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.92, roughness: 0.16 }),
     );
     sensorCan.position.set(0, 0.56, -0.35);
     this.group.add(sensorCan);
 
     const vent = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+      new THREE.CylinderGeometry(0.045, 0.045, 0.025, 14),
+      new THREE.MeshStandardMaterial({ color: 0x05080f }),
     );
     vent.position.set(0.06, 0.625, -0.35);
     this.group.add(vent);
+
+    const smdDark = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.45 });
+    const smdCap = new THREE.MeshStandardMaterial({ color: 0x9a6b3e, roughness: 0.35 });
+    const ldo = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.07, 0.16), smdDark);
+    ldo.position.set(0.38, 0.55, -0.45);
+    this.group.add(ldo);
+    for (let i = 0; i < 3; i++) {
+      const r = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.06), i === 0 ? smdCap : smdDark);
+      r.position.set(-0.36 + i * 0.18, 0.54, -0.08);
+      this.group.add(r);
+    }
 
     this.actLedMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
@@ -294,7 +428,7 @@ export class Bme280Mesh {
       emissiveIntensity: 0.8,
     });
     const led = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.06, 0.08), this.actLedMat);
-    led.position.set(-0.4, 0.54, -0.22);
+    led.position.set(-0.42, 0.54, -0.38);
     this.group.add(led);
   }
 
@@ -304,7 +438,7 @@ export class Bme280Mesh {
 }
 
 /**
- * HC-SR04 Ultraschallsensor mit zwei silbernen 40-kHz-Transducer-Kapseln.
+ * HC-SR04 Ultraschallsensor mit zwei silbernen 40-kHz-Transducer-Kapseln & Metallgitter.
  */
 export class UltrasonicMesh {
   public readonly group = new THREE.Group();
@@ -318,7 +452,7 @@ export class UltrasonicMesh {
     center.divideScalar(pinPositions.length);
     this.group.position.copy(center);
 
-    const pinMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.88, roughness: 0.22 });
+    const pinMat = new THREE.MeshStandardMaterial({ color: 0xdbe2ea, metalness: 0.9, roughness: 0.2 });
     pinPositions.forEach((wp) => {
       const l = wp.clone().sub(center);
       const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.46, 8), pinMat);
@@ -326,29 +460,91 @@ export class UltrasonicMesh {
       this.group.add(pin);
     });
 
-    // Classic blue HC-SR04 standing PCB
-    const pcb = new THREE.Mesh(
-      new THREE.BoxGeometry(2.5, 1.22, 0.12),
-      new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.45, metalness: 0.12 }),
-    );
+    // Classic blue HC-SR04 standing PCB mit Silkscreen
+    const pcbCanvas = document.createElement('canvas');
+    pcbCanvas.width = 512;
+    pcbCanvas.height = 256;
+    const pctx = pcbCanvas.getContext('2d');
+    if (pctx) {
+      pctx.fillStyle = '#1d4ed8';
+      pctx.fillRect(0, 0, 512, 256);
+      pctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      pctx.lineWidth = 4;
+      pctx.strokeRect(10, 10, 492, 236);
+      pctx.fillStyle = '#f8fafc';
+      pctx.font = 'bold 28px JetBrains Mono, monospace';
+      pctx.textAlign = 'center';
+      pctx.fillText('HC-SR04', 256, 224);
+      pctx.font = 'bold 22px JetBrains Mono, monospace';
+      pctx.fillText('T', 68, 224);
+      pctx.fillText('R', 444, 224);
+      pctx.font = 'bold 16px JetBrains Mono, monospace';
+      pctx.fillText('VCC  TRIG  ECHO  GND', 256, 248);
+    }
+    const pcbTex = new THREE.CanvasTexture(pcbCanvas);
+    pcbTex.colorSpace = THREE.SRGBColorSpace;
+    const pcbSide = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.45 });
+    const pcbFront = new THREE.MeshStandardMaterial({ map: pcbTex, roughness: 0.4, metalness: 0.12 });
+
+    const pcb = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.24, 0.12), [
+      pcbSide,
+      pcbSide,
+      pcbSide,
+      pcbSide,
+      pcbFront,
+      pcbSide,
+    ]);
     pcb.position.set(0, 1.02, 0);
     pcb.castShadow = true;
     this.group.add(pcb);
 
-    // Two silver cylindrical ultrasonic transducers
-    const canMat = new THREE.MeshStandardMaterial({ color: 0xdbe2ea, metalness: 0.88, roughness: 0.22 });
-    const meshDark = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.6 });
+    // 3 kleine SMD-ICs (MAX232 + LM324) auf der Rückseite des HC-SR04
+    const icMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.45 });
+    for (const ix of [-0.68, 0, 0.68]) {
+      const ic = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.08), icMat);
+      ic.position.set(ix, 1.02, -0.09);
+      this.group.add(ic);
+    }
+
+    // Feine Waben-/Gitter-Textur für die beiden 40-kHz-Ultraschallkapseln
+    const gridCanvas = document.createElement('canvas');
+    gridCanvas.width = 128;
+    gridCanvas.height = 128;
+    const gctx = gridCanvas.getContext('2d');
+    if (gctx) {
+      gctx.fillStyle = '#111827';
+      gctx.fillRect(0, 0, 128, 128);
+      gctx.strokeStyle = '#94a3b8';
+      gctx.lineWidth = 3;
+      for (let i = 0; i <= 128; i += 10) {
+        gctx.beginPath();
+        gctx.moveTo(i, 0);
+        gctx.lineTo(i, 128);
+        gctx.moveTo(0, i);
+        gctx.lineTo(128, i);
+        gctx.stroke();
+      }
+    }
+    const gridTex = new THREE.CanvasTexture(gridCanvas);
+    gridTex.colorSpace = THREE.SRGBColorSpace;
+
+    const canMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.92, roughness: 0.18 });
+    const meshFaceMat = new THREE.MeshStandardMaterial({ map: gridTex, metalness: 0.65, roughness: 0.35 });
 
     for (const sx of [-0.66, 0.66]) {
-      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.62, 24), canMat);
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.62, 28), canMat);
       cyl.rotation.x = Math.PI / 2;
       cyl.position.set(sx, 1.05, 0.34);
       cyl.castShadow = true;
       this.group.add(cyl);
 
-      const face = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 24), meshDark);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.41, 0.035, 10, 28), canMat);
+      rim.position.set(sx, 1.05, 0.65);
+      this.group.add(rim);
+
+      const face = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.03, 24), meshFaceMat);
       face.rotation.x = Math.PI / 2;
-      face.position.set(sx, 1.05, 0.65);
+      face.position.set(sx, 1.05, 0.64);
       this.group.add(face);
     }
 
@@ -424,9 +620,43 @@ export class RelayModuleMesh {
       sideMat,
       sideMat,
     ]);
-    cube.position.y = 0.62;
+    cube.position.set(-0.22, 0.66, 0);
     cube.castShadow = true;
     this.group.add(cube);
+
+    // Träger-Platine + grüne 3-fach-Schraubklemme (NO / COM / NC) + Optokoppler PC817
+    const carrierPcb = new THREE.Mesh(
+      new THREE.BoxGeometry(2.35, 0.12, 1.52),
+      new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.45 }),
+    );
+    carrierPcb.position.set(0.05, 0.09, 0.05);
+    carrierPcb.castShadow = true;
+    this.group.add(carrierPcb);
+
+    const terminalMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.4 });
+    const termBlock = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.56, 1.16), terminalMat);
+    termBlock.position.set(0.86, 0.42, 0);
+    termBlock.castShadow = true;
+    this.group.add(termBlock);
+
+    const screwMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.92, roughness: 0.18 });
+    const slotMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+    for (const sz of [-0.34, 0, 0.34]) {
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 14), screwMat);
+      screw.position.set(0.86, 0.72, sz);
+      this.group.add(screw);
+      const slot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.025), slotMat);
+      slot.position.set(0.86, 0.755, sz);
+      this.group.add(slot);
+    }
+
+    // Optokoppler IC
+    const opto = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.16, 0.24),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45 }),
+    );
+    opto.position.set(-0.72, 0.22, 0.56);
+    this.group.add(opto);
 
     // Contact closed indicator LED
     this.statusLedMat = new THREE.MeshStandardMaterial({
@@ -434,8 +664,8 @@ export class RelayModuleMesh {
       emissive: 0x22c55e,
       emissiveIntensity: 0,
     });
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 14), this.statusLedMat);
-    led.position.set(0.55, 1.22, 0.4);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 14), this.statusLedMat);
+    led.position.set(0.36, 0.22, 0.62);
     this.group.add(led);
 
     // 1N4007 Flyback diode sitting right in front of the relay coil pins
@@ -492,42 +722,114 @@ export class ServoMesh {
 
     const blueMat = new THREE.MeshPhysicalMaterial({
       color: 0x0284c7,
-      roughness: 0.25,
+      roughness: 0.18,
+      transmission: 0.35,
       transparent: true,
-      opacity: 0.9,
-      clearcoat: 0.8,
+      opacity: 0.84,
+      clearcoat: 0.9,
     });
 
-    // Main rectangular servo body
+    // Main rectangular servo body + TowerPro SG90 Seiten-Aufkleber
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 256;
+    labelCanvas.height = 160;
+    const sctx = labelCanvas.getContext('2d');
+    if (sctx) {
+      sctx.fillStyle = '#f8fafc';
+      sctx.fillRect(0, 0, 256, 160);
+      sctx.fillStyle = '#0284c7';
+      sctx.fillRect(0, 0, 256, 48);
+      sctx.fillStyle = '#ffffff';
+      sctx.font = 'bold 26px Inter, sans-serif';
+      sctx.textAlign = 'center';
+      sctx.fillText('TowerPro™', 128, 34);
+      sctx.fillStyle = '#0f172a';
+      sctx.font = 'bold 34px JetBrains Mono, monospace';
+      sctx.fillText('SG90 9g', 128, 102);
+      sctx.fillStyle = '#475569';
+      sctx.font = '600 18px JetBrains Mono, monospace';
+      sctx.fillText('Micro Servo 5V', 128, 138);
+    }
+    const labelTex = new THREE.CanvasTexture(labelCanvas);
+    labelTex.colorSpace = THREE.SRGBColorSpace;
+
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.35, 0.92), blueMat);
     body.position.y = 0.72;
     body.castShadow = true;
     this.group.add(body);
 
-    // Side mounting tabs
+    const sticker = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.22, 0.78),
+      new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.35 }),
+    );
+    sticker.position.set(-0.08, 0.62, 0.466);
+    this.group.add(sticker);
+
+    // Sichtbare weiße Nylon-Zahnräder im transluzenten SG90-Getriebekopf!
+    const gearMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4 });
+    for (const [gx, gy, gr] of [
+      [-0.22, 1.24, 0.2],
+      [0.12, 1.28, 0.24],
+      [0.35, 1.36, 0.28],
+    ] as const) {
+      const g = new THREE.Mesh(new THREE.CylinderGeometry(gr, gr, 0.14, 16), gearMat);
+      g.position.set(gx, gy, 0);
+      this.group.add(g);
+    }
+
+    // 3-adriges Servo-Flachbandkabel (Braun/Rot/Orange) an der linken Seite
+    const cableColors = [0x78350f, 0xef4444, 0xf97316];
+    cableColors.forEach((c, idx) => {
+      const wire = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.032, 0.032, 0.55, 8),
+        new THREE.MeshStandardMaterial({ color: c, roughness: 0.4 }),
+      );
+      wire.rotation.z = Math.PI / 2;
+      wire.position.set(-1.12, 0.24, -0.07 + idx * 0.07);
+      this.group.add(wire);
+    });
+
+    // Side mounting tabs + Schraub-Löcher
     const tabs = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.14, 0.92), blueMat);
     tabs.position.y = 1.08;
     this.group.add(tabs);
 
+    const holeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    for (const hx of [-1.02, 1.02]) {
+      const h = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 12), holeMat);
+      h.position.set(hx, 1.08, 0);
+      this.group.add(h);
+    }
+
     // Cylindrical gearbox turret on top
-    const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.35, 22), blueMat);
+    const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.44, 0.36, 26), blueMat);
     turret.position.set(0.35, 1.52, 0);
     this.group.add(turret);
 
-    // Rotating white servo horn
-    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35 });
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.18, 18), whiteMat);
+    // Rotating white servo horn mit 5 authentischen Anlenk-Bohrungen
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.32 });
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.2, 20), whiteMat);
     hub.position.y = 0.08;
     this.hornGroup.add(hub);
 
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.1, 0.22), whiteMat);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.095, 0.22), whiteMat);
     arm.position.set(0.55, 0.1, 0);
     arm.castShadow = true;
     this.hornGroup.add(arm);
 
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.095, 14), whiteMat);
+    tip.position.set(1.18, 0.1, 0);
+    this.hornGroup.add(tip);
+
+    for (let i = 0; i < 5; i++) {
+      const pinhole = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.11, 8), holeMat);
+      pinhole.position.set(0.36 + i * 0.19, 0.1, 0);
+      this.hornGroup.add(pinhole);
+    }
+
     const screw = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 0.22, 12),
-      new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.2 }),
+      new THREE.CylinderGeometry(0.065, 0.065, 0.23, 14),
+      new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.92, roughness: 0.18 }),
     );
     screw.position.y = 0.1;
     this.hornGroup.add(screw);
@@ -566,20 +868,51 @@ export class BuzzerMesh {
       this.group.add(leg);
     }
 
+    // Deckel mit '+'-Polaritäts-Prägung + Sockelring + versenkte Messing-Piezo-Membran
+    const bzCanvas = document.createElement('canvas');
+    bzCanvas.width = 256;
+    bzCanvas.height = 256;
+    const bctx = bzCanvas.getContext('2d');
+    if (bctx) {
+      bctx.fillStyle = '#111827';
+      bctx.fillRect(0, 0, 256, 256);
+      bctx.strokeStyle = 'rgba(226,232,240,0.3)';
+      bctx.lineWidth = 6;
+      bctx.beginPath();
+      bctx.arc(128, 128, 108, 0, Math.PI * 2);
+      bctx.stroke();
+      bctx.fillStyle = '#e2e8f0';
+      bctx.font = 'bold 46px JetBrains Mono, monospace';
+      bctx.textAlign = 'center';
+      bctx.fillText('+', 64, 144);
+      bctx.font = 'bold 16px JetBrains Mono, monospace';
+      bctx.fillStyle = '#94a3b8';
+      bctx.fillText('PIEZO 5V', 128, 214);
+    }
+    const bzTopTex = new THREE.CanvasTexture(bzCanvas);
+    bzTopTex.colorSpace = THREE.SRGBColorSpace;
+    const bzSideMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.4, metalness: 0.12 });
+    const bzTopMat = new THREE.MeshStandardMaterial({ map: bzTopTex, roughness: 0.35, metalness: 0.12 });
+
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.54, 0.54, 0.56, 28),
-      new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.42, metalness: 0.1 }),
+      new THREE.CylinderGeometry(0.54, 0.56, 0.56, 32),
+      [bzSideMat, bzTopMat, bzSideMat],
     );
     body.position.y = 0.56;
     body.castShadow = true;
     this.group.add(body);
 
-    // Center acoustic aperture hole
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.025, 10, 22), bzSideMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.855;
+    this.group.add(rim);
+
+    // Center acoustic aperture hole with recessed brass piezo disc
     const hole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.14, 0.05, 16),
-      new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.7, roughness: 0.3 }),
+      new THREE.CylinderGeometry(0.145, 0.145, 0.04, 18),
+      new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.22 }),
     );
-    hole.position.y = 0.85;
+    hole.position.y = 0.84;
     this.group.add(hole);
 
     // 2 expanding sound wave rings above the piezo

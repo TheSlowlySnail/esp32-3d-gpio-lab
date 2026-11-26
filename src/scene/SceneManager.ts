@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { getEspBoardById } from '../engine/BoardCatalog';
 import { formatResistance } from '../engine/ComponentRegistry';
 import {
@@ -168,6 +169,7 @@ export class SceneManager {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly controls: OrbitControls;
   private readonly resizeObserver: ResizeObserver;
+  private envRenderTarget: THREE.WebGLRenderTarget | null = null;
 
   private hemiLight!: THREE.HemisphereLight;
   private keyLight!: THREE.DirectionalLight;
@@ -266,6 +268,13 @@ export class SceneManager {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
+
+    // Dezente Studio-IBL-Reflexionen für realistischen Metall-, Goldpin- & Epoxid-Glanz
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envRenderTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    this.scene.environment = this.envRenderTarget.texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
 
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.width = '100%';
@@ -438,6 +447,34 @@ export class SceneManager {
     esdPad.position.set(-0.4, 0.025, 0.15);
     esdPad.receiveShadow = true;
     this.scene.add(esdPad);
+
+    // Feiner ESD-Matten-Rand & metallischer Erdungs-Druckknopf (10 mm Snap)
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.65, metalness: 0.15 });
+    const rimTop = new THREE.Mesh(new THREE.BoxGeometry(17.32, 0.075, 0.14), rimMat);
+    rimTop.position.set(-0.4, 0.038, 0.15 - 4.8);
+    this.scene.add(rimTop);
+    const rimBot = new THREE.Mesh(new THREE.BoxGeometry(17.32, 0.075, 0.14), rimMat);
+    rimBot.position.set(-0.4, 0.038, 0.15 + 4.8);
+    this.scene.add(rimBot);
+    const rimL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.075, 9.6), rimMat);
+    rimL.position.set(-0.4 - 8.6, 0.038, 0.15);
+    this.scene.add(rimL);
+    const rimR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.075, 9.6), rimMat);
+    rimR.position.set(-0.4 + 8.6, 0.038, 0.15);
+    this.scene.add(rimR);
+
+    const esdSnap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.27, 0.08, 20),
+      new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.88, roughness: 0.22 }),
+    );
+    esdSnap.position.set(-8.2, 0.07, 4.15);
+    this.scene.add(esdSnap);
+    const esdSnapStud = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.11, 0.1, 16),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.92, roughness: 0.18 }),
+    );
+    esdSnapStud.position.set(-8.2, 0.12, 4.15);
+    this.scene.add(esdSnapStud);
   }
 
   public setTheme(theme: ThemeMode): void {
@@ -464,6 +501,7 @@ export class SceneManager {
       this.hemiLight.groundColor.setHex(0x020617);
       this.keyLight.intensity = 0.22;
       this.rimLight.intensity = 0.12;
+      this.scene.environmentIntensity = 0.1;
       this.renderer.toneMappingExposure = 1.28;
       return;
     }
@@ -480,6 +518,7 @@ export class SceneManager {
       this.hemiLight.groundColor.setHex(0xcbd5e1);
       this.keyLight.intensity = 1.35;
       this.rimLight.intensity = 0.42;
+      this.scene.environmentIntensity = 0.65;
       this.renderer.toneMappingExposure = 1.02;
     } else {
       this.scene.background = new THREE.Color('#0a101d');
@@ -493,6 +532,7 @@ export class SceneManager {
       this.hemiLight.groundColor.setHex(0x0f172a);
       this.keyLight.intensity = 1.55;
       this.rimLight.intensity = 0.56;
+      this.scene.environmentIntensity = 0.55;
       this.renderer.toneMappingExposure = 1.12;
     }
   }
@@ -2773,6 +2813,7 @@ export class SceneManager {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     window.removeEventListener('pointerup', this.onPointerUp);
     this.controls.dispose();
+    this.envRenderTarget?.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();

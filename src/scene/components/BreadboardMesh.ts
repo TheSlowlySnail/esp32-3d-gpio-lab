@@ -86,26 +86,58 @@ export class BreadboardMesh {
     const ctx = canvas.getContext('2d');
 
     if (ctx) {
-      // Slightly warm off-white ABS plastic
-      ctx.fillStyle = '#e8ecf0';
+      // Slightly warm off-white ABS plastic with subtle matte surface gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bgGrad.addColorStop(0, '#eef2f6');
+      bgGrad.addColorStop(0.5, '#e7ecf2');
+      bgGrad.addColorStop(1, '#dfe6ee');
+      ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Subtle border bevel
+      // Outer molded ABS chamfer highlight & groove
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 10;
-      ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
-
-      // Center DIP trench shadow
-      const midY = canvas.height / 2;
-      ctx.fillStyle = '#d5dce4';
-      ctx.fillRect(40, midY - 24, canvas.width - 80, 48);
-      ctx.strokeStyle = '#b9c4d0';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(40, midY - 24, canvas.width - 80, 48);
+      ctx.lineWidth = 12;
+      ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
 
       // Power rail separator lines
       const toCanvasX = (x: number) => ((x + width / 2) / width) * canvas.width;
       const toCanvasY = (z: number) => ((z + depth / 2) / depth) * canvas.height;
+
+      // Snap-off power rail molded seam grooves
+      ctx.fillStyle = '#cfd8e3';
+      ctx.fillRect(24, toCanvasY(-1.76) - 4, canvas.width - 48, 8);
+      ctx.fillRect(24, toCanvasY(1.76) - 4, canvas.width - 48, 8);
+
+      // Center DIP trench recess shading
+      const midY = canvas.height / 2;
+      const trenchGrad = ctx.createLinearGradient(0, midY - 28, 0, midY + 28);
+      trenchGrad.addColorStop(0, '#c4cfd9');
+      trenchGrad.addColorStop(0.25, '#d6dee7');
+      trenchGrad.addColorStop(0.75, '#dce3ec');
+      trenchGrad.addColorStop(1, '#eef2f6');
+      ctx.fillStyle = trenchGrad;
+      ctx.fillRect(36, midY - 26, canvas.width - 72, 52);
+      ctx.strokeStyle = '#aebbc9';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(36, midY - 26, canvas.width - 72, 52);
+
+      // Subtle chamfer bevel rings printed around every breadboard socket
+      const allRows = ['j', 'i', 'h', 'g', 'f', 'e', 'd', 'c', 'b', 'a', '-top', '+top', '+bot', '-bot'];
+      for (let col = 1; col <= this.spec.cols; col++) {
+        const cx = toCanvasX(this.colToLocalX(col));
+        for (const r of allRows) {
+          if ((r.includes('top') || r.includes('bot')) && col % 6 === 0 && col < 30) continue;
+          const cy = toCanvasY(BOARD_ROWS[r]);
+          ctx.fillStyle = '#c8d2de';
+          ctx.fillRect(cx - 16, cy - 16, 32, 32);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(cx - 14, cy + 12, 28, 3);
+          ctx.fillRect(cx + 12, cy - 14, 3, 28);
+        }
+      }
 
       // Top blue (-) and red (+) lines
       ctx.lineWidth = 6;
@@ -208,15 +240,34 @@ export class BreadboardMesh {
     baseMesh.position.y = 0.04;
     this.group.add(baseMesh);
 
-    // Subtle 3D recess strip for the central DIP channel
-    const trenchGeo = new THREE.BoxGeometry(width - 0.5, 0.04, 0.22);
+    // Subtle 3D recess strip for the central DIP channel + molded side rails
+    const trenchGeo = new THREE.BoxGeometry(width - 0.5, 0.036, 0.24);
     const trenchMat = new THREE.MeshStandardMaterial({
-      color: 0xcbd5e1,
+      color: 0xc2ccd8,
       roughness: 0.65,
     });
     const trenchMesh = new THREE.Mesh(trenchGeo, trenchMat);
-    trenchMesh.position.y = height + 0.005;
+    trenchMesh.position.y = height + 0.004;
     this.group.add(trenchMesh);
+
+    // Authentic MB-102 dovetail interlocking tabs along top/right edges
+    const tabMat = new THREE.MeshStandardMaterial({
+      color: 0xd6dde5,
+      roughness: 0.44,
+      metalness: 0.05,
+    });
+    for (const tx of [-2.4, 2.4]) {
+      const tab = new THREE.Mesh(new THREE.BoxGeometry(0.46, height * 0.72, 0.14), tabMat);
+      tab.position.set(tx, height * 0.44, -depth / 2 - 0.06);
+      tab.castShadow = true;
+      this.group.add(tab);
+    }
+    for (const tz of [-1.25, 1.25]) {
+      const tab = new THREE.Mesh(new THREE.BoxGeometry(0.14, height * 0.72, 0.42), tabMat);
+      tab.position.set(width / 2 + 0.06, height * 0.44, tz);
+      tab.castShadow = true;
+      this.group.add(tab);
+    }
   }
 
   private buildHoles(): void {
@@ -242,24 +293,40 @@ export class BreadboardMesh {
       }
     }
 
-    const holeGeo = new THREE.BoxGeometry(0.115, 0.04, 0.115);
+    const holeGeo = new THREE.BoxGeometry(0.118, 0.04, 0.118);
     const holeMat = new THREE.MeshStandardMaterial({
-      color: 0x111827,
-      roughness: 0.7,
-      metalness: 0.25,
+      color: 0x0b1120,
+      roughness: 0.8,
+      metalness: 0.15,
+    });
+
+    // Metallic phosphor-bronze/nickel spring clips glinting inside each socket
+    const clipGeo = new THREE.BoxGeometry(0.056, 0.046, 0.028);
+    const clipMat = new THREE.MeshStandardMaterial({
+      color: 0xdbe2ea,
+      metalness: 0.92,
+      roughness: 0.2,
     });
 
     const instanced = new THREE.InstancedMesh(holeGeo, holeMat, holePositions.length);
+    const clips = new THREE.InstancedMesh(clipGeo, clipMat, holePositions.length);
     const dummy = new THREE.Object3D();
+    const clipDummy = new THREE.Object3D();
     const y = this.spec.height - 0.005;
 
     holePositions.forEach(([x, z], idx) => {
       dummy.position.set(x, y, z);
       dummy.updateMatrix();
       instanced.setMatrixAt(idx, dummy.matrix);
+
+      clipDummy.position.set(x, y + 0.002, z);
+      clipDummy.updateMatrix();
+      clips.setMatrixAt(idx, clipDummy.matrix);
     });
     instanced.instanceMatrix.needsUpdate = true;
+    clips.instanceMatrix.needsUpdate = true;
     this.group.add(instanced);
+    this.group.add(clips);
   }
 
   private colToLocalX(col: number): number {

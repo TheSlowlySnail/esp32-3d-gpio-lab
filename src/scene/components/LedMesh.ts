@@ -56,69 +56,103 @@ export class LedMesh {
     const angleY = Math.atan2(-dz, dx);
     this.group.rotation.y = angleY;
 
-    // Two metallic leads plunging into the breadboard
+    // Authentisch abgewinkelte Metall-Beinchen (Anode links, Kathode rechts)
     const leadMat = new THREE.MeshStandardMaterial({
-      color: 0xcbd5e1,
-      metalness: 0.9,
-      roughness: 0.22,
+      color: 0xdbe2ea,
+      metalness: 0.94,
+      roughness: 0.16,
     });
 
-    const leadHeight = 0.78;
-    const leadGeo = new THREE.CylinderGeometry(0.028, 0.028, leadHeight, 10);
-    const leftLead = new THREE.Mesh(leadGeo, leadMat);
-    leftLead.position.set(-spacing / 2, leadHeight / 2 - 0.1, 0);
-    this.group.add(leftLead);
+    const half = spacing / 2;
+    const makeLead = (side: -1 | 1) => {
+      const innerX = side * Math.min(0.11, half * 0.45);
+      const pts = [
+        new THREE.Vector3(side * half, -0.08, 0),
+        new THREE.Vector3(side * half, 0.34, 0),
+        new THREE.Vector3(innerX, 0.56, 0),
+        new THREE.Vector3(innerX, 0.86, 0),
+      ];
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.15);
+      const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 18, 0.024, 8, false), leadMat);
+      m.castShadow = true;
+      return m;
+    };
+    this.group.add(makeLead(-1), makeLead(1));
 
-    const rightLead = new THREE.Mesh(leadGeo, leadMat);
-    rightLead.position.set(spacing / 2, leadHeight / 2 - 0.1, 0);
-    this.group.add(rightLead);
+    // Realistisches LED-Innenleben: Kathoden-Amboss (Anvil + Reflektor-Wanne), Anoden-Post & goldener Bonddraht
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.24, 0.032), leadMat);
+    post.position.set(-0.085, 0.94, 0);
+    this.group.add(post);
 
-    // Inner metal anvil / reflector cup (visible when LED is off)
-    const cupGeo = new THREE.CylinderGeometry(0.09, 0.05, 0.22, 12);
+    const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.24, 0.036), leadMat);
+    anvil.position.set(0.055, 0.95, 0);
+    this.group.add(anvil);
+
+    const cupGeo = new THREE.CylinderGeometry(0.095, 0.048, 0.14, 14);
     const cupMesh = new THREE.Mesh(cupGeo, leadMat);
-    cupMesh.position.set(0, 0.96, 0);
+    cupMesh.position.set(0.02, 1.07, 0);
     this.group.add(cupMesh);
 
-    // Bright internal die core
+    const bondCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.085, 1.05, 0),
+      new THREE.Vector3(-0.03, 1.19, 0.015),
+      new THREE.Vector3(0.02, 1.13, 0),
+    ]);
+    const bondWire = new THREE.Mesh(
+      new THREE.TubeGeometry(bondCurve, 10, 0.008, 6, false),
+      new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.95, roughness: 0.18 }),
+    );
+    this.group.add(bondWire);
+
+    // Bright internal semiconductor die core
     this.coreMat = new THREE.MeshStandardMaterial({
       color: 0x330808,
       emissive: 0xff2a2a,
       emissiveIntensity: 0,
-      roughness: 0.2,
+      roughness: 0.18,
     });
-    const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 14), this.coreMat);
-    coreMesh.position.set(0, 1.14, 0);
+    const coreMesh = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.08), this.coreMat);
+    coreMesh.position.set(0.02, 1.14, 0);
     this.group.add(coreMesh);
 
-    // Outer 5mm epoxy lens (collar + cylinder + hemisphere dome)
+    // Outer 5mm epoxy lens (collar + cathode flat indicator + cylinder + smooth dome)
     this.bodyMat = new THREE.MeshPhysicalMaterial({
       color: 0x5c1111,
       emissive: 0xff2a2a,
       emissiveIntensity: 0,
-      roughness: 0.14,
+      roughness: 0.1,
       metalness: 0.0,
-      transmission: 0.35,
+      ior: 1.48,
+      transmission: 0.42,
       transparent: true,
       opacity: 0.86,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
+      clearcoatRoughness: 0.06,
     });
 
-    const flangeGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.12, 24);
+    const flangeGeo = new THREE.CylinderGeometry(0.325, 0.33, 0.12, 28);
     const flangeMesh = new THREE.Mesh(flangeGeo, this.bodyMat);
     flangeMesh.position.set(0, 0.74, 0);
     flangeMesh.castShadow = true;
     this.group.add(flangeMesh);
 
-    const barrelGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.48, 24);
+    // Subtile Kathoden-Abflachung (Flat Spot) auf der rechten Seite (+x) am Kragen
+    const flatMark = new THREE.Mesh(
+      new THREE.BoxGeometry(0.03, 0.115, 0.24),
+      new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, transparent: true, opacity: 0.45 }),
+    );
+    flatMark.position.set(0.315, 0.74, 0);
+    this.group.add(flatMark);
+
+    const barrelGeo = new THREE.CylinderGeometry(0.27, 0.278, 0.5, 28);
     const barrelMesh = new THREE.Mesh(barrelGeo, this.bodyMat);
     barrelMesh.position.set(0, 1.04, 0);
     barrelMesh.castShadow = true;
     this.group.add(barrelMesh);
 
-    const domeGeo = new THREE.SphereGeometry(0.27, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const domeGeo = new THREE.SphereGeometry(0.27, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2);
     const domeMesh = new THREE.Mesh(domeGeo, this.bodyMat);
-    domeMesh.position.set(0, 1.28, 0);
+    domeMesh.position.set(0, 1.29, 0);
     domeMesh.castShadow = true;
     this.group.add(domeMesh);
 

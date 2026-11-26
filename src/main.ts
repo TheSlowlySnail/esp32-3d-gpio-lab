@@ -53,6 +53,7 @@ import { FritzingSchematicPanel } from './ui/FritzingSchematic';
 import { FunnyIdeasView } from './ui/FunnyIdeasView';
 import { GLOSSARY_ENTRIES } from './ui/GlossaryData';
 import { GlossaryView } from './ui/GlossaryView';
+import { MultimeterView } from './ui/MultimeterView';
 import { Oscilloscope } from './ui/Oscilloscope';
 import { SandboxPanel } from './ui/SandboxPanel';
 import { SolderingView } from './ui/SolderingView';
@@ -175,6 +176,7 @@ class LearnEsp32App {
   private favoritesView!: FavoritesView;
   private solderingView!: SolderingView;
   private glossaryView!: GlossaryView;
+  private multimeterView!: MultimeterView;
   private modalFritzing!: FritzingSchematicPanel;
 
   private lessonSelectEl!: HTMLSelectElement;
@@ -189,6 +191,7 @@ class LearnEsp32App {
   private favoritesMountEl!: HTMLElement;
   private solderingMountEl!: HTMLElement;
   private glossaryMountEl!: HTMLElement;
+  private multimeterMountEl!: HTMLElement;
   private favCountBadgeEl!: HTMLElement;
   private controlsMountEl!: HTMLElement;
   private sandboxMountEl!: HTMLElement;
@@ -402,7 +405,7 @@ class LearnEsp32App {
             type="button"
             role="tab"
             data-mode="lessons"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>📚</span>
             <span>Lektionen</span>
@@ -412,30 +415,30 @@ class LearnEsp32App {
             type="button"
             role="tab"
             data-mode="sandbox"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>🔧</span>
-            <span>Freie Werkbank</span>
-            <span class="text-[10px] font-mono opacity-80">(${SANDBOX_CATALOG.length} Teile)</span>
+            <span>Werkbank</span>
+            <span class="text-[10px] font-mono opacity-80">(${SANDBOX_CATALOG.length})</span>
           </button>
           <button
             type="button"
             role="tab"
             data-mode="guided"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>🧭</span>
-            <span>Bau mit mir!</span>
-            <span class="text-[10px] font-mono opacity-80">(${GUIDED_PROJECTS.length} Projekte)</span>
+            <span>Bau mit mir</span>
+            <span class="text-[10px] font-mono opacity-80">(${GUIDED_PROJECTS.length})</span>
           </button>
           <button
             type="button"
             role="tab"
             data-mode="funny"
-            class="px-3 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
           >
             <span>😂</span>
-            <span>Funny Ideen</span>
+            <span>Funny</span>
             <span class="text-[10px] font-mono opacity-80">(${FUNNY_IDEAS.length})</span>
           </button>
           <button
@@ -446,6 +449,15 @@ class LearnEsp32App {
           >
             <span>🔥</span>
             <span>Löten</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-mode="multimeter"
+            class="px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>📟</span>
+            <span>Multimeter</span>
           </button>
           <button
             type="button"
@@ -534,6 +546,9 @@ class LearnEsp32App {
 
       <!-- Rubrik: E-Technik Grundlagen & Fachbegriffe (Glossar + Live-Rechner) -->
       <section data-mount="glossary" class="hidden flex-1 overflow-y-auto"></section>
+
+      <!-- Rubrik: Multimeter-Schule & Interaktiver Mess-Trainer -->
+      <section data-mount="multimeter" class="hidden flex-1 overflow-y-auto"></section>
 
       <!-- Component Registry Modal -->
       <div data-modal="registry" class="hidden fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm items-center justify-center p-4">
@@ -686,6 +701,10 @@ class LearnEsp32App {
                   <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">G</kbd>
                 </div>
                 <div class="flex items-center justify-between gap-2">
+                  <span class="eng-text-body">Multimeter-Schule &amp; Mess-Trainer</span>
+                  <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">M</kbd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
                   <span class="eng-text-body">Pin-Eigenschaften anzeigen</span>
                   <kbd class="px-2 py-0.5 rounded border border-slate-500/40 bg-slate-900/50 font-mono text-[10.5px] eng-text-main">Maus-Hover</kbd>
                 </div>
@@ -724,6 +743,7 @@ class LearnEsp32App {
     this.favoritesMountEl = this.root.querySelector('[data-mount="favorites"]')!;
     this.solderingMountEl = this.root.querySelector('[data-mount="soldering"]')!;
     this.glossaryMountEl = this.root.querySelector('[data-mount="glossary"]')!;
+    this.multimeterMountEl = this.root.querySelector('[data-mount="multimeter"]')!;
     this.favCountBadgeEl = this.root.querySelector('[data-fav-count]')!;
     this.controlsMountEl = this.root.querySelector('[data-mount="controls"]')!;
     this.sandboxMountEl = this.root.querySelector('[data-mount="sandbox"]')!;
@@ -805,6 +825,7 @@ class LearnEsp32App {
         }
       },
     });
+    this.multimeterView = new MultimeterView(this.multimeterMountEl);
     this.sandboxPanel = new SandboxPanel(this.sandboxMountEl, {
       onSelectTool: (tool) => {
         this.sandboxTool = tool;
@@ -1469,6 +1490,13 @@ class LearnEsp32App {
         return;
       }
 
+      // Multimeter-Schule öffnen (M)
+      if (e.code === 'KeyM') {
+        e.preventDefault();
+        this.setAppMode(this.appMode === 'multimeter' ? 'lessons' : 'multimeter');
+        return;
+      }
+
       // Mit / Ohne Breadboard (B) in Lektionen
       if (e.code === 'KeyB' && this.appMode === 'lessons') {
         e.preventDefault();
@@ -1613,6 +1641,10 @@ class LearnEsp32App {
       this.glossaryView.render();
       return;
     }
+    if (mode === 'multimeter') {
+      this.multimeterView.render();
+      return;
+    }
 
     if (mode === 'lessons') {
       const lesson = getLessonById(this.params.topology);
@@ -1632,7 +1664,8 @@ class LearnEsp32App {
       this.appMode === 'funny' ||
       this.appMode === 'favorites' ||
       this.appMode === 'soldering' ||
-      this.appMode === 'glossary';
+      this.appMode === 'glossary' ||
+      this.appMode === 'multimeter';
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((btn) => {
       const m = btn.dataset.mode as AppMode;
@@ -1647,11 +1680,13 @@ class LearnEsp32App {
                 ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-400 shadow-[0_0_12px_rgba(217,70,239,0.25)]'
                 : m === 'soldering'
                   ? 'bg-orange-500/22 border-orange-500 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.28)]'
-                  : m === 'glossary'
-                    ? 'bg-sky-500/22 border-sky-400 text-sky-300 shadow-[0_0_12px_rgba(56,189,248,0.28)]'
-                    : m === 'favorites'
-                      ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
-                      : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
+                  : m === 'multimeter'
+                    ? 'bg-yellow-500/22 border-yellow-400 text-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.28)]'
+                    : m === 'glossary'
+                      ? 'bg-sky-500/22 border-sky-400 text-sky-300 shadow-[0_0_12px_rgba(56,189,248,0.28)]'
+                      : m === 'favorites'
+                        ? 'bg-amber-500/22 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.28)]'
+                        : 'bg-cyan-500/20 border-cyan-500 eng-text-accent shadow-[0_0_12px_rgba(6,182,212,0.22)]';
         btn.className = `px-2.5 py-1 rounded-lg border text-xs font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeStyle}`;
         btn.setAttribute('aria-selected', 'true');
       } else {
@@ -1666,6 +1701,7 @@ class LearnEsp32App {
     this.favoritesMountEl.classList.toggle('hidden', this.appMode !== 'favorites');
     this.solderingMountEl.classList.toggle('hidden', this.appMode !== 'soldering');
     this.glossaryMountEl.classList.toggle('hidden', this.appMode !== 'glossary');
+    this.multimeterMountEl.classList.toggle('hidden', this.appMode !== 'multimeter');
     this.sceneManager.setPaused(isFullGallery);
     this.solderingView.setActive(this.appMode === 'soldering');
 
@@ -1715,6 +1751,9 @@ class LearnEsp32App {
     } else if (this.appMode === 'glossary') {
       this.modeSubbarHintEl.textContent =
         `${GLOSSARY_ENTRIES.length} E-Technik-Grundlagen & Fachbegriffe (Pull-Down, Pull-Up, Ohm, MOSFET, I²C…) + Live-Vorwiderstands-Rechner!`;
+    } else if (this.appMode === 'multimeter') {
+      this.modeSubbarHintEl.textContent =
+        'Interaktiver Multimeter-Trainer: Spannung (parallel), Widerstand (stromlos), Durchgang/LED & Strom (in Reihe) sicher üben!';
     } else {
       this.modeSubbarHintEl.textContent =
         'Deine persönliche Sammlung aus Lieblings-Sensoren, Aktoren, Lektionen, Projekten & Funny-Ideen';
